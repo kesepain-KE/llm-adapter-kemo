@@ -1,0 +1,7 @@
+httpx>=0.28
+tiktoken>=0.12
+
+# Web 框架（server.py 使用 FastAPI 时取消注释）
+# fastapi>=0.115
+# uvicorn>=0.32
+# uvicorn[standard]

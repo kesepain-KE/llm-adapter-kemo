@@ -1,0 +1,28 @@
+{
+  "provider": "deepseek",
+  "enabled": true,
+  "base_url": "https://api.deepseek.com",
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "modules": {
+    "chat": "chat",
+    "token_count": "token_count"
+  },
+  "models": {
+    "deepseek-v4-flash": {
+      "capability": "chat",
+      "vendor_model": "deepseek-v4-flash",
+      "supports_stream": true,
+      "supports_tools": true,
+      "supports_json_output": true,
+      "supports_thinking": true
+    },
+    "deepseek-v4-pro": {
+      "capability": "chat",
+      "vendor_model": "deepseek-v4-pro",
+      "supports_stream": true,
+      "supports_tools": true,
+      "supports_json_output": true,
+      "supports_thinking": true
+    }
+  }
+}

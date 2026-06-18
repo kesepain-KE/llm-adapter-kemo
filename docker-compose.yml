@@ -1,0 +1,15 @@
+services:
+  kemo-adapter:
+    build: .
+    container_name: kemo-adapter
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - provider.env       # 本地开发用；生产用 secrets 注入
+    environment:
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data_status:/app/data_status   # 调用日志持久化到宿主机
+      - ./config:/app/config:ro          # 挂配置目录（只读），方便热改
+    # command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

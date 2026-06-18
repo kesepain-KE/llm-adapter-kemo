@@ -1,0 +1,10 @@
+{
+  "providers": {
+    "deepseek": {
+      "enabled": true
+    },
+    "mimo": {
+      "enabled": false
+    }
+  }
+}
