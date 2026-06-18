@@ -13,7 +13,9 @@
     "enabled": true,
     "visible": true,
     "extra": {
-      "thinking": { "type": "enabled" },
+      "thinking": {
+        "type": "enabled"
+      },
       "reasoning_effort": "high"
     }
   }
