@@ -16,27 +16,29 @@ Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM provider
 - [API Endpoints](#api-endpoints)
 - [Developing a New Provider](#developing-a-new-provider)
 - [FAQ](#faq)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
 
 ## Background
 
-As the LLM ecosystem grows, each provider offers its own API format, authentication method, and parameter conventions. Integrating multiple providers requires clients to maintain a lot of adapter logic, making model switching expensive and error-prone.
+As the LLM ecosystem grows, each provider offers its own API format, authentication method, and parameter conventions. Integrating multiple providers requires clients to maintain extensive adapter logic, making model switching expensive and error-prone.
 
 Kemo LLM Adapter solves this by exposing all providers through a **unified OpenAI-compatible API**. Clients only need to talk to one endpoint and change the model name to switch between backends.
 
 ## Features
 
-- **Unified API** — All providers use the OpenAI-compatible `/v1/chat/completions` endpoint
-- **Streaming** — SSE streaming with usage in the final chunk
+- **Unified API** — All providers share the OpenAI-compatible `/v1/chat/completions` endpoint
+- **Streaming** — SSE streaming with usage metadata in the final chunk
 - **Pluggable Providers** — Each provider lives in its own directory, auto-discovered by the registry
 - **API Key Management** — Per-key model whitelist + token quota control
-- **Usage Analytics** — Every request logged as JSONL, aggregated by key/provider/model
-- **Hot-Reload Config** — `config.json`, `models.json`, `api_keys.json` changes take effect without restart
+- **Usage Analytics** — JSONL request logging, aggregated by key/provider/model
+- **Hot-Reload Config** — `config.json`, `models.json`, `api_keys.json` reload without restart
 - **Web Dashboard** — Manage providers, models, and keys from your browser
 - **Provider Scaffolding** — `add_diy.scaffold()` generates adapter boilerplate in one call
 - **Docker Support** — Ready-to-use Docker Compose setup
+- **AI Agent Friendly** — `agent_control.md` guides AI agents to configure providers autonomously
 
 ## Architecture
 
@@ -49,35 +51,28 @@ kemo-llm-adapter/
 │   └── global_prompt.md     # Global system prompt
 │
 ├── provider/<name>/         # Each provider in its own directory
-│   ├── model.json           # Metadata (base_url, api_key_env, model list)
-│   ├── __init__.py          # Exports adapter classes + factory functions
+│   ├── model.json           # Metadata (base_url, api_key_env, etc.)
 │   ├── chat.py              # Chat adapter (invoke + invoke_stream)
 │   ├── token_count.py       # Token counting & normalization
 │   ├── audio.py             # Audio adapter (optional)
-│   ├── image.py             # Image adapter (optional)
-│   └── ...                  # Other capability modules
+│   └── image.py             # Image adapter (optional)
 │
 ├── core/                    # Orchestration layer
-│   ├── registry.py          # Scans provider/*/model.json, loads modules
+│   ├── registry.py          # Auto-discovers and loads provider modules
 │   ├── router.py            # Resolves model names to provider+model
 │   ├── auth.py              # Bearer token auth + model whitelist
-│   ├── call_log.py          # Unified request logging (JSON Lines)
+│   ├── call_log.py          # Unified request logging (JSONL)
 │   └── usage.py             # Token usage & quota management
 │
 ├── api/                     # FastAPI service layer
-│   ├── app.py               # Application factory
-│   ├── routes/              # Routes (v1.py main chat + admin endpoints)
-│   └── services/            # Business logic
-│
-├── add_diy/                 # Toolkit
-│   ├── scaffold.py          # Generates new provider boilerplate
-│   └── test.py              # Minimal connectivity test
-│
+├── add_diy/                 # Scaffolding toolkit
 ├── web/                     # Web dashboard frontend
+│
 ├── server.py                # Entry point
+├── setup.py                 # Initialization wizard (recommended for new users)
+├── agent_control.md         # AI agent operation guide
 ├── docker-compose.yml       # Docker deployment
-├── Dockerfile               # Image build
-└── requirements.txt         # Python dependencies
+└── Dockerfile               # Image build
 ```
 
 ### Core Conventions
@@ -96,34 +91,30 @@ kemo-llm-adapter/
 - Python >= 3.10
 - pip
 
-### Installation
+### Installation & Launch
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/kemo-llm-adapter.git
-cd kemo-llm-adapter
+git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
+cd llm-adapter-kemo
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. One-step initialization (env check + deps install + dir init + core validation)
+python setup.py
 
-# 3. Create configuration files
-cp provider.env.example provider.env
-cp config/api_keys.json.example config/api_keys.json
-cp config/models.json.example config/models.json
+# 3. Edit provider.env with your API keys
+# 4. Edit config/api_keys.json to set up internal keys
 
-# 4. Edit provider.env and fill in your API keys
-# 5. Edit api_keys.json to set up your internal keys
-
-# 6. Start the server
+# 5. Start the server
 python server.py
 ```
 
 The server runs at `http://127.0.0.1:8741` by default.
 
+> `setup.py` is the recommended entry point for new users. It handles environment checks, dependency installation, directory creation, and core module validation in a guided wizard. Use `python setup.py --check` for a quick environment check only.
+
 ### Docker Deployment
 
 ```bash
-# Make sure provider.env is configured
 docker-compose up -d
 ```
 
@@ -133,7 +124,7 @@ docker-compose up -d
 # Health check
 curl http://127.0.0.1:8741/health
 
-# List available models (requires a valid key)
+# List available models
 curl -H "Authorization: Bearer sk-your-key" http://127.0.0.1:8741/v1/models
 
 # Test chat
@@ -145,8 +136,6 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
 
 ## Configuration
 
-### Configuration Files
-
 | File | Purpose | Hot-Reload |
 |------|---------|------------|
 | `config/config.json` | Provider enable/disable | ✅ |
@@ -156,56 +145,7 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
 | `provider/*/model.json` | Provider metadata | ❌ Restart needed |
 | `provider.env` | Provider API keys | ❌ Restart needed |
 
-### Configuration Examples
-
-**config.json** — Control which providers are active:
-
-```json
-{
-  "providers": {
-    "deepseek": { "enabled": true },
-    "stepfun": { "enabled": true }
-  }
-}
-```
-
-**models.json** — Register exposed models:
-
-```json
-{
-  "deepseek-deepseek-v4-flash": {
-    "provider": "deepseek",
-    "model": "deepseek-v4-flash",
-    "capability": "chat",
-    "enabled": true,
-    "visible": true
-  }
-}
-```
-
-**api_keys.json** — Define client keys and permissions:
-
-```json
-{
-  "keys": {
-    "sk-kemo-admin": {
-      "name": "Admin Key",
-      "enabled": true,
-      "models": ["deepseek-deepseek-v4-flash"],
-      "quota": { "total_tokens": 1000000000, "used_tokens": 0 }
-    }
-  }
-}
-```
-
-**provider.env** — Provider API keys:
-
-```env
-DEEPSEEK_API_KEY=sk-your-real-key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-STEPFUN_API_KEY=your-stepfun-key
-STEPFUN_BASE_URL=https://api.stepfun.com
-```
+See `provider.env.example` and example files under `config/` for detailed configuration templates.
 
 ## API Endpoints
 
@@ -257,14 +197,11 @@ created = scaffold(
 )
 ```
 
-After generation, you need to:
+After generation:
 
 1. Edit `provider/minimax/chat.py` — implement parameter mapping and response normalization
-2. Edit `config/config.json` — enable the new provider
-3. Edit `config/models.json` — register models
-4. Edit `config/api_keys.json` — grant model permissions to a key
-5. Add the API key to `provider.env`
-6. Restart the server
+2. Register the model in `config/models.json`, `api_keys.json`, and `provider.env`
+3. Restart the server
 
 For detailed guidance, refer to `agent_control.md`.
 
@@ -272,11 +209,11 @@ For detailed guidance, refer to `agent_control.md`.
 
 ### 401 Unauthorized on startup
 
-The request lacks an `Authorization: Bearer` header, or the key is not in `api_keys.json`.
+Missing `Authorization: Bearer` header, or the key is not registered in `api_keys.json`.
 
 ### Config changes not taking effect
 
-- `config/config.json`, `models.json`, `api_keys.json` → hot-reload, no restart needed
+- JSON files under `config/` → hot-reload, no restart needed
 - `provider/*/model.json`, `provider.env` → restart required
 
 ### How to temporarily disable a model?
@@ -285,9 +222,11 @@ Set `"enabled": false` for that model in `models.json`. No restart needed.
 
 ### How to add a new provider?
 
-Use `add_diy.scaffold()` to generate boilerplate, then follow the steps in `agent_control.md`.
+Use `add_diy.scaffold()` to generate boilerplate, then follow `agent_control.md`.
 
----
+## Contributing
+
+PRs and Issues are welcome. The `agent_control.md` manual is designed to guide AI agents through provider development and configuration management autonomously.
 
 ## License
 

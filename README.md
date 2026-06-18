@@ -16,27 +16,29 @@ Kemo LLM Adapter 是一个轻量级 API 网关，将多个厂商的 LLM 服务�
 - [API 端点](#api-端点)
 - [开发新厂商](#开发新厂商)
 - [常见问题](#常见问题)
+- [参与贡献](#参与贡献)
 - [许可证](#许可证)
 
 ---
 
 ## 背景
 
-随着大模型厂商百花齐放，每种模型都有独立的 API 格式、鉴权方式和参数约定。同时接入多个厂商时，客户端需要维护大量适配逻辑，切换模型成本高。
+大模型厂商百花齐放，每种模型都有独立的 API 格式、鉴权方式和参数约定。同时接入多个厂商时，客户端需要维护大量适配逻辑，切换模型成本高。
 
-Kemo LLM Adapter 解决这个问题：将所有厂商的 API 统一为 **OpenAI 兼容格式**，客户端只需对接一个端点，通过修改模型名即可切换后端厂商。
+Kemo LLM Adapter 将所有厂商的 API 统一为 **OpenAI 兼容格式**，客户端只需对接一个端点，通过修改模型名即可切换后端厂商。
 
 ## 特性
 
-- **统一 API** — 所有厂商使用 OpenAI 兼容的 `/v1/chat/completions` 端点
+- **统一 API** — 全厂商统一 `/v1/chat/completions` 端点
 - **流式支持** — SSE 流式响应，末 chunk 自动附带 usage
-- **多厂商插件化** — 每个厂商独立目录，`core/registry` 自动发现加载
+- **插件化厂商** — 每个厂商独立目录，`core/registry` 自动发现加载
 - **密钥管理** — 每密钥独立模型白名单 + Token 配额控制
-- **用量统计** — 每次请求自动记录 JSONL 日志，支持按密钥/厂商/模型汇总
+- **用量统计** — JSONL 日志，支持按密钥/厂商/模型汇总
 - **配置热加载** — config.json、models.json、api_keys.json 修改无需重启
 - **Web 管理面板** — 浏览器可视化管理厂商、模型、密钥
-- **厂商脚手架** — `add_diy.scaffold()` 一键生成新厂商适配器样板
+- **厂商脚手架** — `add_diy.scaffold()` 一键生成适配器样板
 - **Docker 部署** — 开箱即用的 Docker Compose 配置
+- **AI Agent 友好** — `agent_control.md` 指导 AI 自主完成厂商配置
 
 ## 项目架构
 
@@ -49,35 +51,28 @@ kemo-llm-adapter/
 │   └── global_prompt.md     # 全局安全提示词
 │
 ├── provider/<厂商名>/       # 每个厂商独立目录
-│   ├── model.json           # 厂商元信息（base_url, api_key_env, 模型列表）
-│   ├── __init__.py          # 导出适配器类 + 工厂函数
+│   ├── model.json           # 厂商元信息（base_url, api_key_env 等）
 │   ├── chat.py              # 聊天适配器（invoke + invoke_stream）
 │   ├── token_count.py       # Token 统计归一化
 │   ├── audio.py             # 音频适配器（可选）
-│   ├── image.py             # 图像适配器（可选）
-│   └── ...                  # 其他 capability
+│   └── image.py             # 图像适配器（可选）
 │
 ├── core/                    # 编排层
-│   ├── registry.py          # 自动扫描 provider/*/model.json 加载模块
-│   ├── router.py            # 解析暴露模型名 → provider + model
+│   ├── registry.py          # 自动扫描加载 provider 模块
+│   ├── router.py            # 解析模型名 → provider + model
 │   ├── auth.py              # Bearer 鉴权 + 模型白名单
-│   ├── call_log.py          # 统一调用日志（JSON Lines）
+│   ├── call_log.py          # 统一调用日志（JSONL）
 │   └── usage.py             # Token 用量统计 + 配额扣减
 │
 ├── api/                     # FastAPI 服务层
-│   ├── app.py               # 应用工厂
-│   ├── routes/              # 路由（v1.py 主聊天端点 + 管理端点）
-│   └── services/            # 业务逻辑
-│
-├── add_diy/                 # 工具包
-│   ├── scaffold.py          # 生成新 provider 样板文件
-│   └── test.py              # 最小连通测试
-│
+├── add_diy/                 # 脚手架工具包
 ├── web/                     # Web 管理面板前端
-|── server.py                # 启动入口
+│
+├── server.py                # 启动入口
+├── setup.py                 # 初始化向导（推荐新用户使用）
+├── agent_control.md         # AI Agent 操作手册
 ├── docker-compose.yml       # Docker 部署
-├── Dockerfile               # 镜像构建
-└── requirements.txt         # Python 依赖
+└── Dockerfile               # 镜像构建
 ```
 
 ### 核心约定
@@ -96,34 +91,30 @@ kemo-llm-adapter/
 - Python >= 3.10
 - pip
 
-### 安装
+### 安装与启动
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/kemo-llm-adapter.git
-cd kemo-llm-adapter
+git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
+cd llm-adapter-kemo
 
-# 2. 安装依赖
-pip install -r requirements.txt
+# 2. 一键初始化（环境检查 + 安装依赖 + 目录初始化 + 核心验证）
+python setup.py
 
-# 3. 创建配置文件
-cp provider.env.example provider.env
-cp config/api_keys.json.example config/api_keys.json
-cp config/models.json.example config/models.json
+# 3. 编辑 provider.env，填入厂商 API 密钥
+# 4. 编辑 config/api_keys.json，设置内部密钥
 
-# 4. 编辑 provider.env，填入厂商 API 密钥
-# 5. 编辑 api_keys.json，设置内部密钥
-
-# 6. 启动
+# 5. 启动服务
 python server.py
 ```
 
 服务默认运行在 `http://127.0.0.1:8741`。
 
+> `setup.py` 是推荐的新手入口，它会逐一完成环境检查、依赖安装、目录创建和核心模块自检。也可用 `python setup.py --check` 仅检查环境。
+
 ### Docker 部署
 
 ```bash
-# 确保 provider.env 已配置密钥
 docker-compose up -d
 ```
 
@@ -133,7 +124,7 @@ docker-compose up -d
 # 健康检查
 curl http://127.0.0.1:8741/health
 
-# 查看可用模型（需有效密钥）
+# 查看可用模型
 curl -H "Authorization: Bearer sk-your-key" http://127.0.0.1:8741/v1/models
 
 # 聊天测试
@@ -145,8 +136,6 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
 
 ## 配置说明
 
-### 核心配置清单
-
 | 文件 | 作用 | 热加载 |
 |------|------|--------|
 | `config/config.json` | Provider 启停开关 | ✅ |
@@ -156,56 +145,7 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
 | `provider/*/model.json` | 厂商元信息 | ❌ 需重启 |
 | `provider.env` | 厂商 API 密钥 | ❌ 需重启 |
 
-### 配置示例
-
-**config.json** — 控制厂商启用状态：
-
-```json
-{
-  "providers": {
-    "deepseek": { "enabled": true },
-    "stepfun": { "enabled": true }
-  }
-}
-```
-
-**models.json** — 注册暴露的模型：
-
-```json
-{
-  "deepseek-deepseek-v4-flash": {
-    "provider": "deepseek",
-    "model": "deepseek-v4-flash",
-    "capability": "chat",
-    "enabled": true,
-    "visible": true
-  }
-}
-```
-
-**api_keys.json** — 定义客户端密钥和权限：
-
-```json
-{
-  "keys": {
-    "sk-kemo-admin": {
-      "name": "管理密钥",
-      "enabled": true,
-      "models": ["deepseek-deepseek-v4-flash"],
-      "quota": { "total_tokens": 1000000000, "used_tokens": 0 }
-    }
-  }
-}
-```
-
-**provider.env** — 厂商 API 密钥：
-
-```env
-DEEPSEEK_API_KEY=sk-your-real-key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-STEPFUN_API_KEY=your-stepfun-key
-STEPFUN_BASE_URL=https://api.stepfun.com
-```
+详细配置示例请参考仓库中的 `provider.env.example` 及 `config/` 目录下的示例文件。
 
 ## API 端点
 
@@ -227,7 +167,7 @@ STEPFUN_BASE_URL=https://api.stepfun.com
 | `GET` | `/api/config` | 查看配置 | 是 |
 | `POST` | `/api/config/{file}` | 保存配置 | 是 |
 
-### 聊天请求
+### 聊天请求示例
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/chat/completions \
@@ -257,37 +197,36 @@ created = scaffold(
 )
 ```
 
-生成后需要：
+生成后还需：
 
-1. 编辑 `provider/minimax/chat.py` — 实现参数映射和响应归一化
-2. 编辑 `config/config.json` — 启用新厂商
-3. 编辑 `config/models.json` — 注册模型
-4. 编辑 `config/api_keys.json` — 为密钥添加模型权限
-5. 在 `provider.env` 中添加密钥
-6. 重启服务
+1. 编辑 `provider/minimax/chat.py`，实现参数映射和响应归一化
+2. 在 `config/models.json`、`api_keys.json`、`provider.env` 中注册
+3. 重启服务
 
-详细开发指南请参考 `agent_control.md`。
+详细开发指南请参阅 `agent_control.md`。
 
 ## 常见问题
 
-### 启动后 401 Unauthorized
+### 启动后 401
 
-请求中缺少 `Authorization: Bearer` 头，或密钥不在 `api_keys.json` 中。
+请求缺少 `Authorization: Bearer` 头，或密钥不在 `api_keys.json` 中。
 
-### 修改配置后未生效
+### 配置修改后未生效
 
-- `config/config.json`、`models.json`、`api_keys.json` → 热加载，无需重启
+- `config/` 下的 JSON 文件 → 热加载，无需重启
 - `provider/*/model.json`、`provider.env` → 需要重启
 
-### 如何临时关闭某个模型？
+### 临时关闭某模型？
 
-在 `models.json` 中将该模型的 `enabled` 设为 `false`，无需重启。
+在 `models.json` 中将该模型 `enabled` 设为 `false`，无需重启。
 
 ### 如何接入新厂商？
 
-使用 `add_diy.scaffold()` 生成样板，然后按 `agent_control.md` 的步骤操作。
+使用 `add_diy.scaffold()` 生成样板，参考 `agent_control.md` 完成配置。
 
----
+## 参与贡献
+
+欢迎提交 PR 或 Issue。本项目的 AI Agent 操作手册 `agent_control.md` 可引导 AI 自主完成厂商适配开发与配置管理。
 
 ## 许可证
 
