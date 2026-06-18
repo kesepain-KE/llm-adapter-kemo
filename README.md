@@ -52,33 +52,54 @@ kemo-llm-adapter/
 │
 ├── provider/<厂商名>/       # 每个厂商独立目录
 │   ├── model.json           # 厂商元信息（base_url, api_key_env 等）
-│   ├── chat.py              # 聊天适配器（invoke + invoke_stream）
-│   ├── token_count.py       # Token 统计归一化
-│   ├── audio.py             # 音频适配器（可选）
-│   └── image.py             # 图像适配器（可选）
-│
-├── core/                    # 编排层
-│   ├── registry.py          # 自动扫描加载 provider 模块
-│   ├── router.py            # 解析模型名 → provider + model
-│   ├── auth.py              # Bearer 鉴权 + 模型白名单
-│   ├── call_log.py          # 统一调用日志（JSONL）
-│   └── usage.py             # Token 用量统计 + 配额扣减
-│
-├── api/                     # FastAPI 服务层
-├── add_diy/                 # 脚手架工具包
-├── web/                     # Web 管理面板前端
-│
-├── server.py                # 启动入口
-├── setup.py                 # 初始化向导（推荐新用户使用）
-├── agent_control.md         # AI Agent 操作手册
-├── docker-compose.yml       # Docker 部署
-└── Dockerfile               # 镜像构建
+## 快速开始
+
+### 前置条件
+
+- Python >= 3.10
+- pip
+
+### 安装
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
+cd llm-adapter-kemo
+
+# 2. 运行初始化向导（环境检查 → 目录初始化 → 依赖安装 → 核心验证）
+python setup.py
 ```
 
-### 核心约定
+setup.py 会依次完成 Python 版本检查、依赖检测（缺依赖时询问是否安装）、创建必要目录、核心模块自检。也可用 `python setup.py --check` 仅检查环境。
 
-| 约定 | 说明 |
-|------|------|
+### 配置
+
+```bash
+# 复制并编辑示例配置
+cp provider.env.example provider.env
+cp config/api_keys.json.example config/api_keys.json
+cp config/models.json.example config/models.json
+```
+
+然后按以下方式配置厂商密钥（二选一）：
+
+**方式 A — 让 AI Agent 代劳（推荐）**
+```bash
+# 让你的 AI 助手阅读 agent_control.md，自动完成全部配置
+```
+
+**方式 B — 手动编辑**
+- `provider.env` — 填入各厂商 API 密钥
+- `config/api_keys.json` — 设置内部密钥及配额
+- `config/models.json` — 注册要暴露的模型
+
+### 启动
+
+```bash
+python server.py
+```
+
+服务默认运行在 `http://127.0.0.1:8741`。|------|------|
 | 模型命名 | `{provider}-{vendor_model}`，如 `deepseek-deepseek-v4-flash` |
 | Provider 隔离 | 各厂商目录完全隔离，不互相 import |
 | 请求/响应格式 | 统一为 OpenAI-compatible |

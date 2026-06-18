@@ -50,33 +50,54 @@ kemo-llm-adapter/
 │   ├── api_keys.json        # Client keys + whitelist + quota
 │   └── global_prompt.md     # Global system prompt
 │
-├── provider/<name>/         # Each provider in its own directory
-│   ├── model.json           # Metadata (base_url, api_key_env, etc.)
-│   ├── chat.py              # Chat adapter (invoke + invoke_stream)
-│   ├── token_count.py       # Token counting & normalization
-│   ├── audio.py             # Audio adapter (optional)
-│   └── image.py             # Image adapter (optional)
-│
-├── core/                    # Orchestration layer
-│   ├── registry.py          # Auto-discovers and loads provider modules
-│   ├── router.py            # Resolves model names to provider+model
-│   ├── auth.py              # Bearer token auth + model whitelist
-│   ├── call_log.py          # Unified request logging (JSONL)
-│   └── usage.py             # Token usage & quota management
-│
-├── api/                     # FastAPI service layer
-├── add_diy/                 # Scaffolding toolkit
-├── web/                     # Web dashboard frontend
-│
-├── server.py                # Entry point
-├── setup.py                 # Initialization wizard (recommended for new users)
-├── agent_control.md         # AI agent operation guide
-├── docker-compose.yml       # Docker deployment
-└── Dockerfile               # Image build
+## Quick Start
+
+### Prerequisites
+
+- Python >= 3.10
+- pip
+
+### Installation
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
+cd llm-adapter-kemo
+
+# 2. Run the initialization wizard (env check → dir init → deps install → core validation)
+python setup.py
 ```
 
-### Core Conventions
+The wizard checks Python version, detects dependencies (prompts to install if missing), creates required directories, and validates core modules. Use `python setup.py --check` for a quick environment check only.
 
+### Configuration
+
+```bash
+# Copy and edit example config files
+cp provider.env.example provider.env
+cp config/api_keys.json.example config/api_keys.json
+cp config/models.json.example config/models.json
+```
+
+Then configure provider API keys using one of the following approaches:
+
+**Option A — Let an AI Agent handle it (recommended)**
+```bash
+# Have your AI assistant read agent_control.md and complete the setup automatically
+```
+
+**Option B — Manual editing**
+- `provider.env` — Fill in each provider's API keys
+- `config/api_keys.json` — Set up internal keys and quotas
+- `config/models.json` — Register models to expose
+
+### Launch
+
+```bash
+python server.py
+```
+
+The server runs at `http://127.0.0.1:8741` by default.
 | Convention | Description |
 |------------|-------------|
 | Model naming | `{provider}-{vendor_model}`, e.g. `deepseek-deepseek-v4-flash` |
