@@ -1,6 +1,10 @@
 # 不进入 Docker 构建上下文
 __pycache__/
 *.pyc
+.vite/
+node_modules/
+web/node_modules/
+web/dist/
 .git/
 .gitignore
 .dockerignore

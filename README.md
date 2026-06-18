@@ -36,7 +36,7 @@ Kemo LLM Adapter 将所有厂商的 API 统一为 **OpenAI 兼容格式**，客�
 - 密钥管理 — 每密钥独立模型白名单 + Token 配额控制
 - 用量统计 — JSONL 日志，支持按密钥、厂商、模型汇总
 - 配置热加载 — config.json、models.json、api_keys.json 修改无需重启
-- Web 管理面板 — 浏览器可视化管理厂商、模型、密钥
+- React Web 管理面板 — Vite + React 可视化管理厂商、模型、密钥
 - 厂商脚手架 — `add_diy.scaffold()` 一键生成适配器样板
 - Docker 部署 — 开箱即用的 Docker Compose 配置
 - AI Agent 友好 — `agent_control.md` 指导 AI 自主完成厂商配置
@@ -47,6 +47,7 @@ Kemo LLM Adapter 将所有厂商的 API 统一为 **OpenAI 兼容格式**，客�
 
 - Python >= 3.10
 - pip
+- Node.js >= 20 与 npm（本地构建/开发 Web 管理面板需要；Docker 会自动构建）
 
 ### 获取项目
 
@@ -82,6 +83,17 @@ cp config/models.json.example config/models.json
 - `config/api_keys.json` — 设置内部密钥及配额
 - `config/models.json` — 注册要暴露的模型
 
+### 构建 Web 管理面板
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
+
+构建产物写入 `web/dist/`，FastAPI 会在访问 `/` 时返回该 React 页面。
+
 ### 启动
 
 ```bash
@@ -90,11 +102,20 @@ python server.py
 
 服务默认运行在 `http://127.0.0.1:8741`。
 
+前端开发时可以同时运行 Vite，Vite 会把 `/api` 与 `/v1` 代理到本地后端：
+
+```bash
+python server.py
+cd web && npm run dev
+```
+
 ### Docker 部署
 
 ```bash
 docker-compose up -d
 ```
+
+Docker 镜像构建时会自动执行 `npm ci` 和 `npm run build`，无需提前提交 `web/dist/`。
 
 ## 用法
 
@@ -195,7 +216,10 @@ kemo-llm-adapter/
 │
 ├── api/                     # FastAPI 服务层
 ├── add_diy/                 # 脚手架工具包
-├── web/                     # Web 管理面板前端
+├── web/                     # React/Vite Web 管理面板
+│   ├── src/                 # React 源码
+│   ├── package.json         # 前端依赖与构建脚本
+│   └── dist/                # 构建产物（本地生成，不提交）
 │
 ├── server.py                # 启动入口
 ├── setup.py                 # 初始化向导

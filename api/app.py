@@ -1,7 +1,11 @@
 """FastAPI 应用工厂。"""
 
-from fastapi import FastAPI
+import mimetypes
 
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+from api.deps import PROJECT_ROOT
 from api.routes import (
     web_panel,
     api_health,
@@ -15,6 +19,10 @@ from api.routes import (
     chat_completions,
 )
 
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
+
 app = FastAPI(
     title="Kemo LLM Adapter",
     version="0.1.0",
@@ -23,6 +31,10 @@ app = FastAPI(
 )
 
 # ---- Web ----
+web_assets = PROJECT_ROOT / "web" / "dist" / "assets"
+if web_assets.is_dir():
+    app.mount("/assets", StaticFiles(directory=web_assets), name="web-assets")
+
 app.add_api_route("/", web_panel, methods=["GET"], response_class=None)
 
 # ---- /v1/chat/completions ----

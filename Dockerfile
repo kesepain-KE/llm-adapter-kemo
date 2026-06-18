@@ -1,3 +1,14 @@
+FROM node:24-alpine AS web-build
+
+WORKDIR /web
+
+COPY web/package*.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 # 系统依赖（PGLite 场景按需添加）
@@ -15,7 +26,7 @@ COPY core/       core/
 COPY provider/   provider/
 COPY config/     config/
 COPY add_diy/    add_diy/
-COPY web/        web/
+COPY --from=web-build /web/dist web/dist
 COPY server.py   .
 
 # 运行用户
@@ -25,4 +36,4 @@ USER app
 EXPOSE 8000
 
 # ENTRYPOINT 由 docker-compose 或 k8s 覆盖
-CMD ["python", "server.py"]
+CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8000"]

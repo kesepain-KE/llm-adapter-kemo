@@ -36,7 +36,7 @@ Kemo LLM Adapter solves this by exposing all providers through a **unified OpenA
 - API Key Management — Per-key model whitelist + token quota control
 - Usage Analytics — JSONL request logging, aggregated by key, provider, or model
 - Hot-Reload Config — `config.json`, `models.json`, `api_keys.json` reload without restart
-- Web Dashboard — Manage providers, models, and keys from your browser
+- React Web Dashboard — Vite + React dashboard for providers, models, and keys
 - Provider Scaffolding — `add_diy.scaffold()` generates adapter boilerplate in one call
 - Docker Support — Ready-to-use Docker Compose setup
 - AI Agent Friendly — `agent_control.md` guides AI agents to configure providers autonomously
@@ -47,6 +47,7 @@ Kemo LLM Adapter solves this by exposing all providers through a **unified OpenA
 
 - Python >= 3.10
 - pip
+- Node.js >= 20 and npm for local Web dashboard builds/development; Docker builds it automatically
 
 ### Get the Project
 
@@ -82,6 +83,17 @@ Have your AI assistant read `agent_control.md` and complete the provider setup a
 - `config/api_keys.json` — Set up internal keys and quotas
 - `config/models.json` — Register models to expose
 
+### Build the Web Dashboard
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
+
+The build output goes to `web/dist/`. FastAPI serves that React page from `/`.
+
 ### Launch
 
 ```bash
@@ -90,11 +102,20 @@ python server.py
 
 The server runs at `http://127.0.0.1:8741` by default.
 
+For frontend development, run Vite alongside the backend. Vite proxies `/api` and `/v1` to the local server:
+
+```bash
+python server.py
+cd web && npm run dev
+```
+
 ### Docker Deployment
 
 ```bash
 docker-compose up -d
 ```
+
+The Docker image runs `npm ci` and `npm run build` during image build, so `web/dist/` does not need to be committed.
 
 ## Usage
 
@@ -195,7 +216,10 @@ kemo-llm-adapter/
 │
 ├── api/                     # FastAPI service layer
 ├── add_diy/                 # Scaffolding toolkit
-├── web/                     # Web dashboard frontend
+├── web/                     # React/Vite Web dashboard
+│   ├── src/                 # React source
+│   ├── package.json         # Frontend dependencies and scripts
+│   └── dist/                # Generated build output (not committed)
 │
 ├── server.py                # Entry point
 ├── setup.py                 # Initialization wizard
