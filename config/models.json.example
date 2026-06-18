@@ -1,0 +1,30 @@
+{
+  "your-provider-your-model-chat": {
+    "provider": "your-provider",
+    "model": "your-model-name",
+    "capability": "chat",
+    "enabled": true,
+    "visible": true
+  },
+  "your-provider-your-model-tts": {
+    "provider": "your-provider",
+    "model": "your-tts-model",
+    "capability": "audio",
+    "enabled": true,
+    "visible": true
+  },
+  "your-provider-your-model-asr": {
+    "provider": "your-provider",
+    "model": "your-asr-model",
+    "capability": "audio",
+    "enabled": true,
+    "visible": true
+  },
+  "your-provider-your-model-image": {
+    "provider": "your-provider",
+    "model": "your-image-model",
+    "capability": "image",
+    "enabled": true,
+    "visible": true
+  }
+}

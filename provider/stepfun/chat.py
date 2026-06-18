@@ -1,15 +1,12 @@
 """
-DeepSeek 聊天适配器。
+StepFun 聊天适配器。
 
-将统一格式的聊天请求转换为 DeepSeek API 调用，
-处理 stream / non-stream、tool calls、thinking。
+将统一格式的聊天请求转换为 StepFun API 调用，
+处理 stream / non-stream、tool calls。
 
-核心流程::
+StepFun API 为 OpenAI-compatible，端点位于 /v1/chat/completions。
 
-    request → _build_request_body → API 调用
-           → _normalize_response → 统一格式响应
-
-API 文档: https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
+API 文档: https://platform.stepfun.com/docs/overview
 """
 
 from __future__ import annotations
@@ -18,7 +15,6 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
 import httpx
@@ -29,7 +25,7 @@ logger = logging.getLogger(__name__)
 # 常量
 # ---------------------------------------------------------------------------
 
-DEFAULT_BASE_URL = "https://api.deepseek.com"
+DEFAULT_BASE_URL = "https://api.stepfun.com"
 DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
@@ -37,15 +33,15 @@ DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 # 错误类型
 # ---------------------------------------------------------------------------
 
-class DeepSeekError(Exception):
-    """DeepSeek API 通用错误。"""
+class StepFunError(Exception):
+    """StepFun API 通用错误。"""
 
 
-class DeepSeekAuthError(DeepSeekError):
+class StepFunAuthError(StepFunError):
     """API Key 缺失或无效。"""
 
 
-class DeepSeekAPIError(DeepSeekError):
+class StepFunAPIError(StepFunError):
     """API 返回错误响应。"""
 
     def __init__(self, status_code: int, message: str, body: dict | None = None):
@@ -58,12 +54,12 @@ class DeepSeekAPIError(DeepSeekError):
 # 适配器
 # ---------------------------------------------------------------------------
 
-class DeepSeekChat:
-    """DeepSeek 聊天适配器。
+class StepFunChat:
+    """StepFun 聊天适配器。
 
     用法::
 
-        chat = DeepSeekChat(config=model_json)
+        chat = StepFunChat(config=model_json)
         response = await chat.invoke(request)
         # 或流式：
         async for chunk in chat.invoke_stream(request):
@@ -80,28 +76,20 @@ class DeepSeekChat:
         *,
         http_client: httpx.AsyncClient | None = None,
     ):
-        """初始化适配器。
-
-        参数
-        ----
-        config : dict | None
-            model.json 的内容。为 None 时使用默认 base_url。
-        http_client : httpx.AsyncClient | None
-            可注入外部 AsyncClient（测试/复用连接池）。
-        """
+        """初始化适配器。"""
         cfg = config or {}
 
         self._base_url: str = (
-            cfg.get("base_url") or os.environ.get("DEEPSEEK_BASE_URL") or DEFAULT_BASE_URL
+            cfg.get("base_url") or os.environ.get("STEPFUN_BASE_URL") or DEFAULT_BASE_URL
         ).rstrip("/")
 
         self._api_key: str = (
-            os.environ.get(cfg.get("api_key_env", "DEEPSEEK_API_KEY")) or ""
+            os.environ.get(cfg.get("api_key_env", "STEPFUN_API_KEY")) or ""
         )
 
         self._enabled: bool = cfg.get("enabled", True)
 
-        # 模型配置（用于 vendor_model 映射等）
+        # 模型配置
         self._models: dict[str, dict[str, Any]] = cfg.get("models", {})
 
         # HTTP 客户端
@@ -114,25 +102,14 @@ class DeepSeekChat:
     # ------------------------------------------------------------------
 
     async def invoke(self, request: dict[str, Any]) -> dict[str, Any]:
-        """非流式聊天补全。
-
-        参数
-        ----
-        request : dict
-            统一格式请求（OpenAI-compatible）。
-
-        返回
-        ----
-        dict
-            统一格式响应。
-        """
+        """非流式聊天补全。"""
         self._check_enabled()
         self._check_auth()
 
         body = self._build_request_body(request)
         body["stream"] = False
 
-        url = f"{self._base_url}/chat/completions"
+        url = f"{self._base_url}/v1/chat/completions"
         headers = self._build_headers()
 
         logger.debug("invoke url=%s model=%s", url, body.get("model"))
@@ -148,29 +125,17 @@ class DeepSeekChat:
     async def invoke_stream(
         self, request: dict[str, Any]
     ) -> AsyncIterator[dict[str, Any]]:
-        """流式聊天补全。
-
-        参数
-        ----
-        request : dict
-            统一格式请求。
-
-        Yields
-        ------
-        dict
-            统一格式的流式 chunk（含 usage 的末 chunk）。
-        """
+        """流式聊天补全。"""
         self._check_enabled()
         self._check_auth()
 
         body = self._build_request_body(request)
         body["stream"] = True
 
-        # 在流式末尾返回 usage
         if "stream_options" not in body:
             body["stream_options"] = {"include_usage": True}
 
-        url = f"{self._base_url}/chat/completions"
+        url = f"{self._base_url}/v1/chat/completions"
         headers = self._build_headers()
 
         logger.debug("invoke_stream url=%s model=%s", url, body.get("model"))
@@ -187,21 +152,16 @@ class DeepSeekChat:
     # ------------------------------------------------------------------
 
     def _build_request_body(self, request: dict[str, Any]) -> dict[str, Any]:
-        """构建 DeepSeek API 请求体，映射所有支持参数。"""
+        """构建 StepFun API 请求体。"""
         body: dict[str, Any] = {
-            "model": request.get("model", "deepseek-v4-flash"),
+            "model": request.get("model", "step-3.7-flash"),
             "messages": request.get("messages", []),
         }
 
         # ---- 基础参数 ----
-        for param in ("temperature", "top_p", "max_tokens", "stop"):
+        for param in ("temperature", "top_p", "max_tokens", "stop", "user"):
             if param in request:
                 body[param] = request[param]
-
-        # ---- user_id (DeepSeek 使用 user_id 而非 OpenAI 的 user) ----
-        user_id = request.get("user_id") or request.get("user")
-        if user_id is not None:
-            body["user_id"] = user_id
 
         # ---- tools / tool_choice ----
         tools = request.get("tools")
@@ -217,20 +177,25 @@ class DeepSeekChat:
         if response_format is not None:
             body["response_format"] = response_format
 
-        # ---- thinking (DeepSeek 扩展) ----
-        thinking = request.get("thinking")
-        if thinking is not None:
-            body["thinking"] = thinking
-
-        # ---- reasoning_effort ----
-        reasoning_effort = request.get("reasoning_effort")
-        if reasoning_effort is not None:
-            body["reasoning_effort"] = reasoning_effort
-
         # ---- stream_options ----
         stream_options = request.get("stream_options")
         if stream_options is not None:
             body["stream_options"] = stream_options
+
+        # ---- reasoning_effort (推理强度: low/medium/high) ----
+        reasoning_effort = request.get("reasoning_effort")
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
+
+        # ---- reasoning_format (推理格式: general/deepseek-style) ----
+        reasoning_format = request.get("reasoning_format")
+        if reasoning_format is not None:
+            body["reasoning_format"] = reasoning_format
+
+        # ---- frequency_penalty / presence_penalty ----
+        for param in ("frequency_penalty", "presence_penalty"):
+            if param in request:
+                body[param] = request[param]
 
         # ---- n (候选数) ----
         if "n" in request:
@@ -253,12 +218,12 @@ class DeepSeekChat:
     def _normalize_response(
         self, data: dict[str, Any]
     ) -> dict[str, Any]:
-        """将 DeepSeek API 响应归一化为统一格式 (OpenAI-compatible)。"""
+        """将 StepFun API 响应归一化为统一格式 (OpenAI-compatible)。"""
         return {
             "id": data.get("id", ""),
             "object": data.get("object", "chat.completion"),
             "created": data.get("created", int(time.time())),
-            "model": data.get("model", "deepseek-v4-flash"),
+            "model": data.get("model", "step-3.7-flash"),
             "choices": data.get("choices", []),
             "usage": data.get("usage"),
             "system_fingerprint": data.get("system_fingerprint", ""),
@@ -272,7 +237,7 @@ class DeepSeekChat:
             "id": chunk.get("id", ""),
             "object": chunk.get("object", "chat.completion.chunk"),
             "created": chunk.get("created", 0),
-            "model": chunk.get("model", "deepseek-v4-flash"),
+            "model": chunk.get("model", "step-3.7-flash"),
             "choices": chunk.get("choices", []),
             "usage": chunk.get("usage"),
         }
@@ -284,14 +249,7 @@ class DeepSeekChat:
     async def _parse_sse(
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
-        """解析 SSE 事件流，yield 每个 JSON chunk。
-
-        SSE 格式::
-
-            data: {...}\n
-            data: {...}\n\n
-            data: [DONE]\n\n
-        """
+        """解析 SSE 事件流，yield 每个 JSON chunk。"""
         buffer = ""
         async for raw_bytes in response.aiter_bytes():
             buffer += raw_bytes.decode("utf-8", errors="replace")
@@ -326,19 +284,16 @@ class DeepSeekChat:
     # ------------------------------------------------------------------
 
     def _check_enabled(self) -> None:
-        """检查 provider 是否启用。"""
         if not self._enabled:
-            raise DeepSeekError("DeepSeek provider is disabled in model.json")
+            raise StepFunError("StepFun provider is disabled in model.json")
 
     def _check_auth(self) -> None:
-        """检查 API Key 是否配置。"""
         if not self._api_key:
-            raise DeepSeekAuthError(
-                "DEEPSEEK_API_KEY environment variable is not set"
+            raise StepFunAuthError(
+                "STEPFUN_API_KEY environment variable is not set"
             )
 
-    def _make_api_error(self, response: httpx.Response) -> DeepSeekAPIError:
-        """从 HTTP 错误响应构建异常。"""
+    def _make_api_error(self, response: httpx.Response) -> StepFunAPIError:
         try:
             body = response.json()
             message = (
@@ -350,12 +305,11 @@ class DeepSeekChat:
         except Exception:
             body = None
             message = response.text
-        return DeepSeekAPIError(response.status_code, message, body)
+        return StepFunAPIError(response.status_code, message, body)
 
     # ------------------------------------------------------------------
     # 清理
     # ------------------------------------------------------------------
 
     async def close(self) -> None:
-        """关闭 HTTP 客户端（仅当客户端由本实例创建时）。"""
         await self._client.aclose()

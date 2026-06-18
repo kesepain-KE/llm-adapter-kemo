@@ -37,3 +37,27 @@ def read_text(rel_path: str) -> str:
 def write_text(rel_path: str, content: str) -> None:
     """写入文本文件。"""
     (PROJECT_ROOT / rel_path).write_text(content, encoding="utf-8")
+
+
+def read_env_file(rel_path: str) -> dict[str, str]:
+    """读取简单 KEY=VALUE env 文件，忽略注释和空行。"""
+    values: dict[str, str] = {}
+    for line in read_text(rel_path).splitlines():
+        item = line.strip()
+        if not item or item.startswith("#") or "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            values[key] = value
+    return values
+
+
+def read_display_base_url() -> str:
+    """读取面板右上角展示用 BASE_URL，不参与本地 API 调用。"""
+    env = read_env_file("provider.env")
+    for key, value in env.items():
+        if key.lower() == "base_url":
+            return value
+    return ""

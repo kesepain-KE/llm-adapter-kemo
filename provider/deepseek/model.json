@@ -14,7 +14,8 @@
       "supports_stream": true,
       "supports_tools": true,
       "supports_json_output": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "supports_reasoning": true
     },
     "deepseek-v4-pro": {
       "capability": "chat",
@@ -22,7 +23,8 @@
       "supports_stream": true,
       "supports_tools": true,
       "supports_json_output": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "supports_reasoning": true
     }
   }
 }

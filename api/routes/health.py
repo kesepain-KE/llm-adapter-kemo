@@ -1,7 +1,7 @@
 """GET /api/health — 系统健康快照。"""
 
 from api.deps import get_ctx
-from api.utils import today_utc
+from api.services.config_store import read_display_base_url
 
 
 def _health_score(online: int, total: int, error_rate: float) -> int:
@@ -32,4 +32,5 @@ async def api_health():
         "error_rate_pct": round(error_rate, 2),
         "server_version": "0.1.0",
         "quota_enabled": True,
+        "base_url": read_display_base_url(),
     }

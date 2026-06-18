@@ -505,7 +505,8 @@ def _build_model_json(
       "supports_stream": true,
       "supports_tools": false,
       "supports_json_output": false,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "supports_reasoning": false
     }}
   }}
 }}

@@ -1,0 +1,47 @@
+{
+  "provider": "stepfun",
+  "enabled": true,
+  "base_url": "https://api.stepfun.com",
+  "api_key_env": "STEPFUN_API_KEY",
+  "modules": {
+    "chat": "chat",
+    "token_count": "token_count",
+    "audio": "audio",
+    "image": "image"
+  },
+  "models": {
+    "step-3.7-flash": {
+      "capability": "chat",
+      "vendor_model": "step-3.7-flash",
+      "supports_stream": true,
+      "supports_tools": true,
+      "supports_json_output": true,
+      "supports_thinking": true,
+      "supports_reasoning": true
+    },
+    "stepaudio-2.5-tts": {
+      "capability": "audio",
+      "vendor_model": "stepaudio-2.5-tts",
+      "supports_stream": false,
+      "supports_tools": false,
+      "supports_json_output": false,
+      "supports_thinking": false
+    },
+    "stepaudio-2.5-asr": {
+      "capability": "audio",
+      "vendor_model": "stepaudio-2.5-asr",
+      "supports_stream": false,
+      "supports_tools": false,
+      "supports_json_output": false,
+      "supports_thinking": false
+    },
+    "step-image-edit-2": {
+      "capability": "image",
+      "vendor_model": "step-image-edit-2",
+      "supports_stream": false,
+      "supports_tools": false,
+      "supports_json_output": false,
+      "supports_thinking": false
+    }
+  }
+}

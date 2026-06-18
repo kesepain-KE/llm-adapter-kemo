@@ -4,7 +4,10 @@
       "enabled": true
     },
     "mimo": {
-      "enabled": false
+      "enabled": true
+    },
+    "stepfun": {
+      "enabled": true
     }
   }
 }

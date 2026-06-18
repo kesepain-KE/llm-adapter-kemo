@@ -24,7 +24,9 @@ env/
 .vscode/
 .idea/
 *.swp
-*.swo
+
+# provider — 拉取后运行 setup.py 自动创建，不提交代码
+provider/*.swo
 *~
 .DS_Store
 Thumbs.db
@@ -36,3 +38,10 @@ docker-compose.override.yml
 .pytest_cache/
 *.tmp
 /tmp/
+
+# 用户配置 — 每个部署实例不同，提交示例模板即可
+config/api_keys.json
+config/models.json
+
+# 备份文件（不提交）
+*.bak

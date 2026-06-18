@@ -4,8 +4,7 @@ from fastapi.responses import HTMLResponse
 
 from api.deps import PROJECT_ROOT
 
-_WEB_HTML = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
-
 
 async def web_panel():
-    return HTMLResponse(content=_WEB_HTML)
+    html = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=html)
