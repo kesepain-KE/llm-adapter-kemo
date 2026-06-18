@@ -1,5 +1,9 @@
 # Kemo LLM Adapter
 
+<p align="center">
+  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="600">
+</p>
+
 > 多厂商 LLM 统一适配层 — 一套 API 接入多种大模型
 
 Kemo LLM Adapter 是一个轻量级 API 网关，将多个厂商的 LLM 服务（DeepSeek、StepFun、MiniMax 等）统一暴露为 **OpenAI 兼容接口**。你只需挂载一个地址、一个密钥，就能切换和使用不同模型。

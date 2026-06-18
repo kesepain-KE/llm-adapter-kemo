@@ -1,5 +1,9 @@
 # Kemo LLM Adapter
 
+<p align="center">
+  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="600">
+</p>
+
 > Multi-provider LLM unified adapter — One API to access multiple LLM models
 
 Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM providers (DeepSeek, StepFun, MiniMax, etc.) behind a single **OpenAI-compatible interface**. With one endpoint and one API key, you can switch between different models from different vendors.
