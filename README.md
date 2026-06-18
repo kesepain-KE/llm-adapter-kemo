@@ -1,7 +1,7 @@
 # Kemo LLM Adapter
 
 <p align="center">
-  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="600">
+  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="300">
 </p>
 
 > 多厂商 LLM 统一适配层 — 一套 API 接入多种大模型

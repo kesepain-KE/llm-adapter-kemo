@@ -1,7 +1,7 @@
 # Kemo LLM Adapter
 
 <p align="center">
-  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="600">
+  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="300">
 </p>
 
 > Multi-provider LLM unified adapter — One API to access multiple LLM models
