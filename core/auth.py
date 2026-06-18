@@ -40,8 +40,7 @@ class ModelNotAllowedError(AuthError):
     """模型不在密钥的白名单中。"""
 
 
-class QuotaExceededError(AuthError):
-    """Token 额度超限。"""
+from .usage import QuotaExceededError
 
 
 # ---------------------------------------------------------------------------

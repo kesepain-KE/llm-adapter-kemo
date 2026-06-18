@@ -46,6 +46,17 @@ class CallLogger:
     def __init__(self, project_root: str | Path = "."):
         self._root = Path(project_root)
         self._base_dir = self._root / CALL_LOG_DIR
+        self._on_log: Any = None  # CallLogger → UsageManager 回调
+
+    def bind_quota_deduct(self, callback: Any) -> None:
+        """绑定额度扣减回调（供 bootstrap 调用）。
+
+        参数
+        ----
+        callback : callable(token, total_tokens)
+            log 写入后调用，通常指向 UsageManager.deduct_quota()。
+        """
+        self._on_log = callback
 
     # ------------------------------------------------------------------
     # 写入
@@ -96,6 +107,16 @@ class CallLogger:
         entry["choice_count"] = len((response or {}).get("choices", []))
 
         self._write(key_id, entry)
+
+        # 触发额度扣减
+        if self._on_log is not None and not error:
+            total = (usage or {}).get("total_tokens", 0)
+            if total > 0:
+                try:
+                    self._on_log(key_id, total)
+                except Exception:
+                    logger.debug("quota deduct failed for %s", key_id[:12], exc_info=True)
+
         return entry
 
     # ------------------------------------------------------------------

@@ -31,7 +31,7 @@ from .auth import AuthManager, AuthError
 from .router import Router, RouterError
 from .registry import Registry
 from .call_log import CallLogger
-from .usage import UsageManager
+from .usage import UsageManager, QuotaExceededError
 
 __all__ = [
     "bootstrap",
@@ -43,6 +43,7 @@ __all__ = [
     "Registry",
     "CallLogger",
     "UsageManager",
+    "QuotaExceededError",
 ]
 
 
@@ -92,6 +93,7 @@ def bootstrap(project_root: str | Path = ".") -> AppContext:
 
     usage = UsageManager(root, registry=registry)
     usage.bind_call_log(call_log)
+    call_log.bind_quota_deduct(usage.deduct_quota)
 
     return AppContext(
         project_root=str(root),
