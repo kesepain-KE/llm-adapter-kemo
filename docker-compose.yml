@@ -12,4 +12,4 @@ services:
     volumes:
       - ./data_status:/app/data_status   # 调用日志持久化到宿主机
       - ./config:/app/config:ro          # 挂配置目录（只读），方便热改
-    # command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+    # command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]

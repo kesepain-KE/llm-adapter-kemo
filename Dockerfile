@@ -10,10 +10,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 再拷源码
+COPY api/        api/
 COPY core/       core/
 COPY provider/   provider/
 COPY config/     config/
 COPY add_diy/    add_diy/
+COPY web/        web/
 COPY server.py   .
 
 # 运行用户
