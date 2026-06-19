@@ -20,7 +20,8 @@ data_status/call_log/
 # 虚拟环境
 .venv/
 venv/
-env/
+# provider — 拉取后运行 setup.py 自动创建，不提交代码
+provider/
 
 # IDE / 编辑器
 .vscode/
