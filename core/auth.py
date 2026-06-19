@@ -93,8 +93,8 @@ class AuthManager:
         dict
             密钥信息: id / name / enabled / models / quota
         """
-        if not self._loaded:
-            self.load()
+        # 每次鉴权都重新加载，支持 api_keys.json 热修改
+        self.load()
 
         # 1. 查找密钥
         if token not in self._keys:

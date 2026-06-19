@@ -15,7 +15,10 @@ async def api_providers():
         cfg = ctx.registry.get_provider_config(name)
         g_enabled = global_config.get("providers", {}).get(name, {}).get("enabled", True)
         p_enabled = cfg.get("enabled", True)
-        caps = list(ctx.registry._capabilities.get(name, {}).keys())
+        # 显示顶层能力（去重后的顶层 capability 名）
+        all_caps = ctx.registry.list_capabilities(name)
+        top_caps = sorted(set(c.split(".")[0] for c in all_caps))
+        caps = top_caps
         result.append({
             "name": name,
             "enabled": g_enabled and p_enabled,

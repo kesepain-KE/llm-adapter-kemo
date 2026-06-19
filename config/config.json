@@ -3,9 +3,6 @@
     "deepseek": {
       "enabled": true
     },
-    "mimo": {
-      "enabled": true
-    },
     "stepfun": {
       "enabled": true
     }

@@ -27,6 +27,21 @@ class RouterError(Exception):
     """模型路由错误。"""
 
 
+# endpoint 路径 → 期望的顶层能力
+ENDPOINT_CAPABILITY: dict[str, str] = {
+    "/v1/chat/completions": "chat",
+    "/step_plan/v1/chat/completions": "chat",
+    "/v1/audio/speech": "audio",
+    "/v1/audio/transcriptions": "audio",
+    "/v1/audio/speech-to-speech": "audio",
+    "/v1/images/generations": "image",
+    "/v1/images/edits": "image",
+    "/v1/videos/generations": "video",
+    "/v1/embeddings": "embedding",
+    "/v1/rerank": "rerank",
+}
+
+
 class Router:
     """模型别名解析器。"""
 
@@ -66,7 +81,7 @@ class Router:
         返回
         ----
         dict
-            包含 provider / model / capability / enabled / visible / extra。
+            包含 provider / model / capability / endpoint / enabled / visible / extra。
         """
         if not self._loaded:
             self.load()
@@ -79,14 +94,42 @@ class Router:
         if not entry.get("enabled", True):
             raise RouterError(f"model '{model_name}' is disabled")
 
+        capabilities = self._get_capabilities(entry)
+
         return {
             "provider": entry["provider"],
             "model": entry["model"],
-            "capability": entry.get("capability", "chat"),
+            "capabilities": capabilities,
+            "capability": capabilities[0] if capabilities else "chat",  # 向后兼容
+            "endpoint": entry.get("endpoint", "/v1/chat/completions"),
             "enabled": entry.get("enabled", True),
             "visible": entry.get("visible", True),
             "extra": entry.get("extra", {}),
         }
+
+    def resolve_by_endpoint(self, model_name: str, endpoint: str) -> dict[str, Any]:
+        """解析模型，并校验 capability 匹配端点。
+
+        如果模型的 capability 不匹配 endpoint 对应的能力，
+        抛出 RouterError("capability_mismatch", ...)。
+        """
+        route = self.resolve(model_name)
+        capabilities = route["capabilities"]
+
+        # endpoint → 期望的顶层能力
+        expected = ENDPOINT_CAPABILITY.get(endpoint)
+        if expected is None:
+            # 未知 endpoint，放行(由 handler 自行校验)
+            return route
+
+        # 顶层匹配：任一 capability 匹配 endpoint 即可
+        if not any(cap.split(".")[0] == expected for cap in capabilities):
+            caps_str = ", ".join(capabilities)
+            raise RouterError(
+                f"model '{model_name}' capabilities [{caps_str}] do not "
+                f"support endpoint '{endpoint}' (expected '{expected}.*')"
+            )
+        return route
 
     # ------------------------------------------------------------------
     # 列出
@@ -100,12 +143,18 @@ class Router:
         result: list[dict[str, Any]] = []
         for name, entry in self._models.items():
             if entry.get("visible", True):
-                result.append({
+                capabilities = self._get_capabilities(entry)
+                item = {
                     "id": name,
                     "provider": entry["provider"],
                     "model": entry["model"],
-                    "capability": entry.get("capability", "chat"),
-                })
+                    "capabilities": capabilities,
+                    "capability": capabilities[0] if capabilities else "chat",
+                    "endpoint": entry.get("endpoint", "/v1/chat/completions"),
+                }
+                if entry.get("modalities"):
+                    item["modalities"] = entry["modalities"]
+                result.append(item)
         return result
 
     def list_all(self) -> list[dict[str, Any]]:
@@ -115,17 +164,29 @@ class Router:
 
         result: list[dict[str, Any]] = []
         for name, entry in self._models.items():
-            result.append({
+            capabilities = self._get_capabilities(entry)
+            item = {
                 "id": name,
                 "provider": entry["provider"],
                 "model": entry["model"],
-                "capability": entry.get("capability", "chat"),
+                "capabilities": capabilities,
+                "capability": capabilities[0] if capabilities else "chat",
+                "endpoint": entry.get("endpoint", "/v1/chat/completions"),
                 "enabled": entry.get("enabled", True),
                 "visible": entry.get("visible", True),
-            })
+            }
+            if entry.get("modalities"):
+                item["modalities"] = entry["modalities"]
+            result.append(item)
         return result
 
-    def get_extra(self, model_name: str) -> dict[str, Any]:
+    def _get_capabilities(self, entry: dict[str, Any]) -> list[str]:
+        """归一化能力字段：支持新的 'capabilities' 数组和旧的 'capability' 单值。"""
+        if "capabilities" in entry:
+            return entry["capabilities"]
+        if "capability" in entry:
+            return [entry["capability"]]
+        return ["chat"]
         """获取模型的 extra 参数（如 thinking / reasoning_effort）。"""
         if not self._loaded:
             self.load()

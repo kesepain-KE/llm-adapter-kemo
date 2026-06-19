@@ -24,4 +24,21 @@ def auth_to_http(exc: Exception) -> HTTPException:
     return HTTPException(500, detail=str(exc))
 
 
+def capability_error(endpoint: str, model_id: str, expected: str, actual: str) -> HTTPException:
+    """capability 不匹配错误（actual 为逗号分隔的能力列表）。"""
+    return HTTPException(
+        status_code=400,
+        detail={
+            "error": {
+                "message": (
+                    f"model '{model_id}' capabilities [{actual}] do not "
+                    f"support endpoint '{endpoint}' (expected '{expected}.*')"
+                ),
+                "type": "capability_mismatch",
+                "code": 400,
+            }
+        },
+    )
+
+
 __all__ = ["auth_to_http"]

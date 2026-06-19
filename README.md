@@ -38,7 +38,6 @@ Kemo LLM Adapter 将所有厂商的 API 统一为 **OpenAI 兼容格式**，客�
 - 配置热加载 — config.json、models.json、api_keys.json 修改无需重启
 - React Web 管理面板 — Vite + React 可视化管理厂商、模型、密钥
 - 厂商脚手架 — `add_diy.scaffold()` 一键生成适配器样板
-- Docker 部署 — 开箱即用的 Docker Compose 配置
 - AI Agent 友好 — `agent_control.md` 指导 AI 自主完成厂商配置
 
 ## 安装
@@ -47,7 +46,7 @@ Kemo LLM Adapter 将所有厂商的 API 统一为 **OpenAI 兼容格式**，客�
 
 - Python >= 3.10
 - pip
-- Node.js >= 20 与 npm（本地构建/开发 Web 管理面板需要；Docker 会自动构建）
+- Node.js >= 20 与 npm（本地构建/开发 Web 管理面板需要）
 
 ### 获取项目
 
@@ -108,14 +107,6 @@ python server.py
 python server.py
 cd web && npm run dev
 ```
-
-### Docker 部署
-
-```bash
-docker-compose up -d
-```
-
-Docker 镜像构建时会自动执行 `npm ci` 和 `npm run build`，无需提前提交 `web/dist/`。
 
 ## 用法
 
@@ -223,9 +214,7 @@ kemo-llm-adapter/
 │
 ├── server.py                # 启动入口
 ├── setup.py                 # 初始化向导
-├── agent_control.md         # AI Agent 操作手册
-├── docker-compose.yml       # Docker 部署
-└── Dockerfile               # 镜像构建
+└── agent_control.md         # AI Agent 操作手册
 ```
 
 ### 核心约定

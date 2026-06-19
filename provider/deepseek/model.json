@@ -9,8 +9,11 @@
   },
   "models": {
     "deepseek-v4-flash": {
-      "capability": "chat",
+      "capabilities": ["chat"],
       "vendor_model": "deepseek-v4-flash",
+      "endpoint": "/v1/chat/completions",
+      "input": ["text"],
+      "output": ["text"],
       "supports_stream": true,
       "supports_tools": true,
       "supports_json_output": true,
@@ -18,8 +21,11 @@
       "supports_reasoning": true
     },
     "deepseek-v4-pro": {
-      "capability": "chat",
+      "capabilities": ["chat"],
       "vendor_model": "deepseek-v4-pro",
+      "endpoint": "/v1/chat/completions",
+      "input": ["text"],
+      "output": ["text"],
       "supports_stream": true,
       "supports_tools": true,
       "supports_json_output": true,

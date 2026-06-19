@@ -38,7 +38,6 @@ Kemo LLM Adapter solves this by exposing all providers through a **unified OpenA
 - Hot-Reload Config — `config.json`, `models.json`, `api_keys.json` reload without restart
 - React Web Dashboard — Vite + React dashboard for providers, models, and keys
 - Provider Scaffolding — `add_diy.scaffold()` generates adapter boilerplate in one call
-- Docker Support — Ready-to-use Docker Compose setup
 - AI Agent Friendly — `agent_control.md` guides AI agents to configure providers autonomously
 
 ## Installation
@@ -47,7 +46,7 @@ Kemo LLM Adapter solves this by exposing all providers through a **unified OpenA
 
 - Python >= 3.10
 - pip
-- Node.js >= 20 and npm for local Web dashboard builds/development; Docker builds it automatically
+- Node.js >= 20 and npm for local Web dashboard builds/development
 
 ### Get the Project
 
@@ -108,14 +107,6 @@ For frontend development, run Vite alongside the backend. Vite proxies `/api` an
 python server.py
 cd web && npm run dev
 ```
-
-### Docker Deployment
-
-```bash
-docker-compose up -d
-```
-
-The Docker image runs `npm ci` and `npm run build` during image build, so `web/dist/` does not need to be committed.
 
 ## Usage
 
@@ -223,9 +214,7 @@ kemo-llm-adapter/
 │
 ├── server.py                # Entry point
 ├── setup.py                 # Initialization wizard
-├── agent_control.md         # AI agent operation guide
-├── docker-compose.yml       # Docker deployment
-└── Dockerfile               # Image build
+└── agent_control.md         # AI agent operation guide
 ```
 
 ### Core Conventions

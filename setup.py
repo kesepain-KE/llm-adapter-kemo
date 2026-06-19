@@ -194,8 +194,6 @@ def wizard(skip_install: bool = False) -> None:
 
     if ok:
         print("  启动服务器:  python server.py")
-        print("              ./start.sh       (Linux/macOS)")
-        print("              .\\start.ps1     (Windows)")
     else:
         print("  请检查上方错误后重试")
 

@@ -33,9 +33,6 @@ provider/*.swo
 .DS_Store
 Thumbs.db
 
-# Docker
-docker-compose.override.yml
-
 # 测试 / 临时
 .pytest_cache/
 *.tmp

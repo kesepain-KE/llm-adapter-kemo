@@ -3,6 +3,32 @@ import { apiRequest } from './api';
 import Select from './components/Select';
 import { fmtMs, fmtNum, fmtPct, unique } from './utils';
 
+const CAPABILITY_LABELS = {
+  'chat': '对话',
+  'vision.image': '视觉·图片',
+  'vision.video': '视觉·视频',
+  'audio.asr': '语音识别',
+  'audio.tts': '语音合成',
+  'audio.speech_to_speech': '语音·语音',
+  'image.generation': '图像生成',
+  'image.edit': '图像编辑',
+  'video.text_to_video': '视频·文生',
+  'video.image_to_video': '视频·图生',
+  'video.video_to_video': '视频·视频',
+  'embedding': '嵌入',
+  'rerank': '重排',
+};
+
+const CAPABILITY_EMOJI = {
+  'chat': '',
+  'vision': ' 📷',
+  'audio': ' 🎧',
+  'image': ' 📷',
+  'video': ' 🎬',
+  'embedding': '',
+  'rerank': '',
+};
+
 const NAV_ITEMS = [
   ['overview', '仪表盘'],
   ['providers', 'Provider'],
@@ -45,6 +71,21 @@ function Delta({ value, children, downWhenNegative = true }) {
 
 function Badge({ tone = '', children }) {
   return <span className={`badge${tone ? ` ${tone}` : ''}`}>{children}</span>;
+}
+
+function TestPill({ test }) {
+  if (!test) return null;
+  if (test.status === 'pending') {
+    return <span className="test-pill pending">测试中...</span>;
+  }
+  if (test.status === 'success') {
+    const label = [`正常 ${fmtMs(test.latencyMs)}`, test.testedAt ? ` · ${test.testedAt}` : ''].filter(Boolean).join('');
+    return <span className="test-pill success" title={test.content || ''}>{label}</span>;
+  }
+  if (test.status === 'error') {
+    return <span className="test-pill error" title={test.message || ''}>失败</span>;
+  }
+  return null;
 }
 
 function EmptyRow({ colSpan, children = '暂无数据' }) {
@@ -91,7 +132,7 @@ function AppBar({ activeSection, baseUrl, globalSearch, onGlobalSearch, onNaviga
   return (
     <div className="appbar">
       <div className="identity">
-        <div className="logo">K</div>
+        <img className="logo" src="/logo.png" alt="Kemo" />
         <h1>Kemo Adapter</h1>
       </div>
       <nav className="nav">
@@ -292,16 +333,46 @@ function Models({ models, modelTests, onToggleModel, onTestModel }) {
                   <td><span className="mono" style={{ fontSize: 12 }}>{model.id}</span></td>
                   <td>{model.provider}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{model.model}</td>
-                  <td>{model.capability ? <Badge tone="blue">{model.capability}</Badge> : <span className="badge" style={{ opacity: 0.4 }}>—</span>}</td>
+                  <td>
+                    {(() => {
+                      const caps = model.capabilities || (model.capability ? [model.capability] : null);
+                      if (!caps || !caps.length) return <span className="badge" style={{ opacity: 0.4 }}>—</span>;
+                      // 按顶层能力去重提取 emoji
+                      const seenTop = new Set();
+                      const emojis = [];
+                      caps.forEach((cap) => {
+                        const top = cap.split('.')[0];
+                        if (!seenTop.has(top) && CAPABILITY_EMOJI[top]) {
+                          seenTop.add(top);
+                          emojis.push(CAPABILITY_EMOJI[top]);
+                        }
+                      });
+                      return (
+                        <>
+                          {caps.map((cap) => (
+                            <Badge tone="blue" key={cap}>{CAPABILITY_LABELS[cap] || cap}</Badge>
+                          ))}
+                          {emojis.map((emoji, i) => <span key={i}>{emoji}</span>)}
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td>
                     <button type="button" className={`pill-tag${model.enabled ? ' on' : ''}`} onClick={() => onToggleModel(model.id, !model.enabled)}>
                       {model.enabled ? '开' : '关'}
                     </button>
                   </td>
-                  <td>
-                    <button type="button" className="btn" style={{ minHeight: 30, padding: '0 12px', fontSize: 11.5 }} onClick={() => onTestModel(model.id)}>
-                      {modelTests[model.id] || '测试连通'}
-                    </button>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ minHeight: 30, padding: '0 12px', fontSize: 11.5 }}
+                      onClick={() => onTestModel(model.id)}
+                      disabled={modelTests[model.id]?.status === 'pending'}
+                    >
+                      {modelTests[model.id]?.status === 'pending' ? '...' : '测试'}
+                    </button>{' '}
+                    <TestPill test={modelTests[model.id]} />
                   </td>
                 </tr>
               )) : <EmptyRow colSpan={6} children="暂无模型" />}
@@ -578,7 +649,7 @@ export default function App() {
   const [usagePeriod, setUsagePeriod] = useState('today');
   const [logStatus, setLogStatus] = useState('all');
   const [logSearch, setLogSearch] = useState('');
-  const [modelTests, setModelTests] = useState({});
+  const [modelTests, setModelTests] = useState({});  // { [modelId]: { status, latencyMs, message, content, testedAt, requestId } }
   const toastTimer = useRef(null);
 
   const notify = useCallback((message) => {
@@ -730,23 +801,33 @@ export default function App() {
   }
 
   async function testModel(id) {
-    setModelTests((current) => ({ ...current, [id]: '...' }));
+    const requestId = Date.now();
+    setModelTests((current) => ({
+      ...current,
+      [id]: { status: 'pending', requestId },
+    }));
     try {
       const result = await apiRequest(`/models/${id}/test`, { method: 'POST' });
-      setModelTests((current) => ({
-        ...current,
-        [id]: result.ok ? `✓ ${fmtMs(result.latency_ms)}` : `× ${result.error || 'fail'}`,
-      }));
-    } catch (error) {
-      setModelTests((current) => ({ ...current, [id]: `× ${error.message.slice(0, 20)}` }));
-    }
-    window.setTimeout(() => {
       setModelTests((current) => {
-        const next = { ...current };
-        delete next[id];
-        return next;
+        if (current[id]?.requestId !== requestId) return current;
+        const testedAt = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return {
+          ...current,
+          [id]: result.ok
+            ? { status: 'success', latencyMs: result.latency_ms, content: result.content || '', testedAt }
+            : { status: 'error', message: result.error || 'fail', testedAt },
+        };
       });
-    }, 2500);
+    } catch (error) {
+      setModelTests((current) => {
+        if (current[id]?.requestId !== requestId) return current;
+        const testedAt = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return {
+          ...current,
+          [id]: { status: 'error', message: error.message, testedAt },
+        };
+      });
+    }
   }
 
   async function toggleKeyModel(keyId, modelId) {

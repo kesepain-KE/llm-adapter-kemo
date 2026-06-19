@@ -8,6 +8,11 @@ from .logs import api_logs
 from .usage import api_usage
 from .config import api_config, api_config_save
 from .v1 import chat_completions
+from .v1_audio import audio_speech, audio_transcriptions
+from .v1_image import image_generations, image_edits
+from .v1_embedding import embeddings
+from .v1_rerank import rerank
+from .v1_video import video_generations, video_job_status, video_job_content
 
 __all__ = [
     "web_panel",
@@ -20,4 +25,9 @@ __all__ = [
     "api_usage",
     "api_config", "api_config_save",
     "chat_completions",
+    "audio_speech", "audio_transcriptions",
+    "image_generations", "image_edits",
+    "embeddings",
+    "rerank",
+    "video_generations", "video_job_status", "video_job_content",
 ]

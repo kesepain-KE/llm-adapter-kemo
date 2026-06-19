@@ -37,7 +37,25 @@ async def handle_chat(
 
     provider: str = route["provider"]
     vendor_model: str = route["model"]
-    capability: str = route.get("capability", "chat")
+    capability: str = route.get("capability", "chat")  # 向后兼容
+
+    # /v1/chat/completions 只接受 chat / vision.* 模型
+    capabilities = route.get("capabilities", [capability])
+    if not any(cap.split(".")[0] in ("chat", "vision") for cap in capabilities):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "message": (
+                        f"model '{exposed_model}' capabilities {capabilities} "
+                        f"does not support /v1/chat/completions"
+                    ),
+                    "type": "capability_mismatch",
+                    "code": 400,
+                }
+            },
+        )
 
     # 注入 vendor_model + extra
     body["model"] = vendor_model

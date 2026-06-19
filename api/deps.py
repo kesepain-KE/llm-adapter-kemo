@@ -6,12 +6,12 @@ import os
 import sys
 from pathlib import Path
 
-# 项目根 = api/ 的父目录
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# 自举：先把项目根加入 sys.path，确保 path.py 可导入
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 
-# 确保根在 sys.path
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from path import PROJECT_ROOT  # 统一入口，不再自己算
 
 _ctx = None
 

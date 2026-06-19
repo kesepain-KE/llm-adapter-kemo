@@ -25,13 +25,33 @@ logger = logging.getLogger(__name__)
 # 已知 capability → 模块后缀 映射
 # ---------------------------------------------------------------------------
 CAPABILITY_MODULE: dict[str, str] = {
+    # category.subcategory → module file name
     "chat": "chat",
     "token_count": "token_count",
-    "audio": "audio",
-    "image": "image",
-    "video": "video",
+    "vision.image": "vision",
+    "vision.video": "vision",
+    "audio.asr": "audio",
+    "audio.tts": "audio",
+    "audio.speech_to_speech": "audio",
+    "image.generation": "image",
+    "image.edit": "image",
+    "video.text_to_video": "video",
+    "video.image_to_video": "video",
+    "video.video_to_video": "video",
     "embedding": "embedding",
     "rerank": "rerank",
+}
+
+# 顶层能力 → 子能力列表（用于判断子能力归属）
+CAPABILITY_SUB: dict[str, list[str]] = {
+    "chat": ["chat"],
+    "vision": ["vision.image", "vision.video"],
+    "audio": ["audio.asr", "audio.tts", "audio.speech_to_speech"],
+    "image": ["image.generation", "image.edit"],
+    "video": ["video.text_to_video", "video.image_to_video", "video.video_to_video"],
+    "embedding": ["embedding"],
+    "rerank": ["rerank"],
+    "token_count": ["token_count"],
 }
 
 
@@ -105,7 +125,11 @@ class Registry:
     def _load_modules(
         self, provider_name: str, config: dict[str, Any]
     ) -> None:
-        """按 model.json 的 modules 声明加载各个模块。"""
+        """按 model.json 的 modules 声明加载各个模块。
+
+        modules 声明的键是顶层能力名（如 "chat", "audio", "image"），
+        加载后的子能力（如 "audio.tts", "audio.asr"）通过 CAPABILITY_SUB 映射。
+        """
         modules_decl = config.get("modules", {})
         caps: dict[str, bool] = {}
 
@@ -117,8 +141,19 @@ class Registry:
             logger.debug("package '%s' not found", pkg_name)
             pkg = None
 
+        # 按顶层能力迭代（modules_decl 声明的是顶层能力）
+        already_loaded: set[str] = set()
         for capability_key, module_suffix in CAPABILITY_MODULE.items():
-            if capability_key not in modules_decl:
+            # 提取顶层能力名
+            top_level = capability_key.split(".")[0]
+            if top_level not in modules_decl:
+                continue
+            # 同模块只加载一次
+            if module_suffix in already_loaded:
+                # 复用已加载的实例
+                key = (provider_name, module_suffix)
+                if key in self._modules:
+                    caps[capability_key] = True
                 continue
 
             instance = None
@@ -174,7 +209,8 @@ class Registry:
                             )
 
             if instance is not None:
-                self._modules[(provider_name, capability_key)] = instance
+                self._modules[(provider_name, module_suffix)] = instance
+                already_loaded.add(module_suffix)
                 caps[capability_key] = True
                 logger.info(
                     "loaded %s/%s", provider_name, capability_key,
@@ -200,26 +236,63 @@ class Registry:
         """获取 token 统计器实例。"""
         return self._get_module(provider, "token_count")
 
+    def get_audio(self, provider: str) -> Any:
+        """获取音频适配器实例。"""
+        return self._get_module(provider, "audio")
+
+    def get_image(self, provider: str) -> Any:
+        """获取图像适配器实例。"""
+        return self._get_module(provider, "image")
+
+    def get_vision(self, provider: str) -> Any:
+        """获取视觉适配器实例。"""
+        return self._get_module(provider, "vision")
+
+    def get_video(self, provider: str) -> Any:
+        """获取视频适配器实例。"""
+        return self._get_module(provider, "video")
+
+    def get_embedding(self, provider: str) -> Any:
+        """获取嵌入适配器实例。"""
+        return self._get_module(provider, "embedding")
+
+    def get_rerank(self, provider: str) -> Any:
+        """获取重排适配器实例。"""
+        return self._get_module(provider, "rerank")
+
     def get_module(self, provider: str, capability: str) -> Any:
-        """获取任意 capability 模块。"""
+        """获取任意 capability 模块。
+
+        capability 可以是子能力（如 "audio.asr"），
+        内部自动映射到顶层模块（"audio"）。
+        """
         return self._get_module(provider, capability)
 
     def _get_module(self, provider: str, capability: str) -> Any:
-        key = (provider, capability)
+        # capability 可能是子能力，映射到模块后缀
+        module_suffix = CAPABILITY_MODULE.get(capability, capability)
+        key = (provider, module_suffix)
         if key not in self._modules:
             raise ModuleNotFoundError(
                 f"provider '{provider}' has no module '{capability}' "
-                f"(available: {list(self._capabilities.get(provider, {}))})"
+                f"(module '{module_suffix}' not loaded, "
+                f"available: {list(self._capabilities.get(provider, {}))})"
             )
         return self._modules[key]
 
     def has_capability(self, provider: str, capability: str) -> bool:
-        """检查 provider 是否具备某个能力。"""
+        """检查 provider 是否具备某个能力（支持子能力如 "audio.asr"）。"""
         return self._capabilities.get(provider, {}).get(capability, False)
 
     def list_providers(self) -> list[str]:
         """列出所有已加载的 provider 名称。"""
         return list(self._provider_configs.keys())
+
+    def list_capabilities(self, provider: str) -> list[str]:
+        """列出 provider 的所有子能力。"""
+        return [
+            cap for cap, ok in self._capabilities.get(provider, {}).items() if ok
+        ]
 
     def list_models(self, provider: str) -> list[str]:
         """列出 provider 下的所有模型名。"""

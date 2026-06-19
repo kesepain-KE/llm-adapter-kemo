@@ -109,7 +109,8 @@ class StepFunChat:
         body = self._build_request_body(request)
         body["stream"] = False
 
-        url = f"{self._base_url}/v1/chat/completions"
+        api_path = request.get("api_path", "/v1/chat/completions")
+        url = f"{self._base_url}{api_path}"
         headers = self._build_headers()
 
         logger.debug("invoke url=%s model=%s", url, body.get("model"))
@@ -135,7 +136,8 @@ class StepFunChat:
         if "stream_options" not in body:
             body["stream_options"] = {"include_usage": True}
 
-        url = f"{self._base_url}/v1/chat/completions"
+        api_path = request.get("api_path", "/v1/chat/completions")
+        url = f"{self._base_url}{api_path}"
         headers = self._build_headers()
 
         logger.debug("invoke_stream url=%s model=%s", url, body.get("model"))

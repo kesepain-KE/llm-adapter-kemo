@@ -16,8 +16,25 @@ if __name__ == "__main__":
     import os
     import uvicorn
 
+    # ── 启动前置 ──────────────────────────────────────────────
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+    # 加载 provider.env
+    env_file = "provider.env"
+    if os.path.isfile(env_file):
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                m = line.strip().split("=", 1)
+                if len(m) == 2 and not line.lstrip().startswith("#"):
+                    os.environ.setdefault(m[0].strip(), m[1].strip())
+        print("[kemo] loaded provider.env")
+
+    # 创建运行数据目录
+    os.makedirs("data_status/call_log", exist_ok=True)
+
+    # ── 启动服务 ──────────────────────────────────────────────
     parser = argparse.ArgumentParser(description="Kemo LLM Adapter Server")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8741)
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
