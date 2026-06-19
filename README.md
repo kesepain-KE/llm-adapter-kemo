@@ -77,7 +77,7 @@ python setup.py
 `python setup.py` 会在文件缺失时自动生成空的运行态配置：
 
 - `provider.env` 从 `provider.env.example` 复制
-- `config/config.json` 默认 `{"providers": {}}`
+- `config/config.json` 从 `config/config.json.example` 复制
 - `config/models.json` 默认 `{}`
 - `config/api_keys.json` 默认 `{"keys": {}}`
 

@@ -43,6 +43,7 @@ Thumbs.db
 /tmp/
 
 # 用户配置 — 每个部署实例不同，setup.py 会生成空运行态配置，提交示例模板即可
+config/config.json
 config/api_keys.json
 config/models.json
 

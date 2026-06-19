@@ -119,7 +119,9 @@ def _copy_if_missing(src_rel: str, dst_rel: str) -> bool:
 def init_runtime_files() -> None:
     """生成首次运行所需文件；只补缺失文件，不覆盖已有配置。"""
     _copy_if_missing("provider.env.example", "provider.env")
-    _write_json_if_missing("config/config.json", DEFAULT_CONFIG_JSON)
+    if not _copy_if_missing("config/config.json.example", "config/config.json"):
+        if not (PROJECT_ROOT / "config" / "config.json").exists():
+            _write_json_if_missing("config/config.json", DEFAULT_CONFIG_JSON)
     _write_json_if_missing("config/models.json", DEFAULT_MODELS_JSON)
     _write_json_if_missing("config/api_keys.json", DEFAULT_API_KEYS_JSON)
     _write_text_if_missing("config/global_prompt.md")

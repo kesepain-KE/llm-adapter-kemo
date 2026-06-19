@@ -68,7 +68,7 @@ python setup.py
 `python setup.py` creates empty runtime config on first run:
 
 - `provider.env` copied from `provider.env.example`
-- `config/config.json` defaults to `{"providers": {}}`
+- `config/config.json` copied from `config/config.json.example`
 - `config/models.json` defaults to `{}`
 - `config/api_keys.json` defaults to `{"keys": {}}`
 

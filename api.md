@@ -18,7 +18,7 @@ python setup.py
 |-------------|----------|
 | `provider/` | 空 provider 目录 |
 | `provider.env` | 从 `provider.env.example` 复制 |
-| `config/config.json` | `{"providers": {}}` |
+| `config/config.json` | 从 `config/config.json.example` 复制 |
 | `config/models.json` | `{}` |
 | `config/api_keys.json` | `{"keys": {}}` |
 | `config/global_prompt.md` | 空文件 |
