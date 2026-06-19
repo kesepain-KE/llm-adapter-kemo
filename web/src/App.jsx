@@ -128,7 +128,7 @@ function buildTrendPaths(data) {
   return { area, lineA, lineB, maxRequests: fmtNum(maxRequests) };
 }
 
-function AppBar({ activeSection, baseUrl, globalSearch, onGlobalSearch, onNavigate }) {
+function AppBar({ activeSection, baseUrl, onNavigate }) {
   return (
     <div className="appbar">
       <div className="identity">
@@ -149,9 +149,6 @@ function AppBar({ activeSection, baseUrl, globalSearch, onGlobalSearch, onNaviga
           </button>
         ))}
       </nav>
-      <label className="search">
-        <input value={globalSearch} onChange={onGlobalSearch} placeholder="搜索..." autoComplete="off" />
-      </label>
       <div className="base-url-pill" title={baseUrl ? `${baseUrl}\n来自 provider.env，仅用于展示` : 'provider.env 中未配置 BASE_URL'}>
         <span>base_url</span>
         <b className="base-url-text">{baseUrl || '未配置'}</b>
@@ -620,7 +617,6 @@ function Settings({ promptText, onPromptTextChange, onRefreshPrompt, onSavePromp
 
 export default function App() {
   const [activeSection, setActiveSection] = useState(getInitialSection);
-  const [globalSearch, setGlobalSearch] = useState('');
   const [toast, setToast] = useState({ message: '已完成', visible: false });
   const [health, setHealth] = useState(null);
   const [stats, setStats] = useState(null);
@@ -757,14 +753,6 @@ export default function App() {
     }
   }
 
-  function handleGlobalSearch(event) {
-    const value = event.target.value;
-    setGlobalSearch(value);
-    if (value.trim()) {
-      notify(`搜索: ${value.trim()} (使用各 tab 内搜索框)`);
-    }
-  }
-
   async function toggleProvider(name, enabled) {
     try {
       await apiRequest(`/providers/${name}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) });
@@ -862,8 +850,6 @@ export default function App() {
           <AppBar
             activeSection={activeSection}
             baseUrl={health?.base_url || ''}
-            globalSearch={globalSearch}
-            onGlobalSearch={handleGlobalSearch}
             onNavigate={navigate}
           />
           <main className="content">{activeView}</main>
