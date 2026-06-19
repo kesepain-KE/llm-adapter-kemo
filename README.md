@@ -184,7 +184,7 @@ created = scaffold(
 ## 项目架构
 
 ```
-kemo-llm-adapter/
+llm-adapter-kemo/
 ├── config/                  # 全局配置（热加载）
 │   ├── config.json          # Provider 启停开关
 │   ├── models.json          # 暴露模型名 → provider+model 映射

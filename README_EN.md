@@ -184,7 +184,7 @@ For detailed guidance, refer to `agent_control.md`.
 ## Architecture
 
 ```
-kemo-llm-adapter/
+llm-adapter-kemo/
 ├── config/                  # Global configuration (hot-reload)
 │   ├── config.json          # Provider enable/disable switches
 │   ├── models.json          # Exposed model name → provider+model mapping
