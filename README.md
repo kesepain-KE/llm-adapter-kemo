@@ -74,11 +74,12 @@ python setup.py
 
 ### 配置厂商密钥 / Configure Provider Keys
 
-```bash
-cp provider.env.example provider.env
-cp config/api_keys.json.example config/api_keys.json
-cp config/models.json.example config/models.json
-```
+`python setup.py` 会在文件缺失时自动生成空的运行态配置：
+
+- `provider.env` 从 `provider.env.example` 复制
+- `config/config.json` 默认 `{"providers": {}}`
+- `config/models.json` 默认 `{}`
+- `config/api_keys.json` 默认 `{"keys": {}}`
 
 编辑 `provider.env`，填入厂商 API 密钥 / Edit `provider.env` and fill in your provider API keys。
 

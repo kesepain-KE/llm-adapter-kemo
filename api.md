@@ -1,476 +1,342 @@
-# Kemo LLM Adapter — API 文档
+# Kemo LLM Adapter — API 示例文档
 
-服务地址 `http://127.0.0.1:8741`。
+服务地址示例: `http://127.0.0.1:8741`。
+
+> 默认提交的仓库不包含任何 provider 实现、真实模型或真实密钥。本文件中的 `your-provider-*`、`sk-your-client-key` 等内容均为占位示例。新拉取项目后运行 `python setup.py` 会恢复运行所需的空配置文件，之后再按实际厂商补充 `provider/`、`provider.env`、`config/config.json`、`config/models.json` 和 `config/api_keys.json`。
+
+---
+
+## 首次恢复
+
+```bash
+python setup.py
+```
+
+`setup.py` 会在缺失时创建:
+
+| 文件 / 目录 | 默认内容 |
+|-------------|----------|
+| `provider/` | 空 provider 目录 |
+| `provider.env` | 从 `provider.env.example` 复制 |
+| `config/config.json` | `{"providers": {}}` |
+| `config/models.json` | `{}` |
+| `config/api_keys.json` | `{"keys": {}}` |
+| `config/global_prompt.md` | 空文件 |
+
+已有文件不会被覆盖。
 
 ---
 
 ## 鉴权
 
-外部 `/v1/*` 端点全部需要鉴权。在请求头中携带：
+外部 `/v1/*` 端点全部需要鉴权，在请求头中携带:
 
-```
+```http
 Authorization: Bearer <api-key>
 ```
 
-API Key 在 `config/api_keys.json` 中管理，每个 key 有模型白名单和配额限制。
+API Key 在 `config/api_keys.json` 中管理，每个 key 可配置模型白名单和配额限制。
 
-错误码：
-- `401` — 密钥缺失或不存在
-- `403` — 密钥已禁用或模型不在白名单
-- `429` — 超出配额
+常见错误码:
+
+| 状态码 | 含义 |
+|--------|------|
+| `401` | 密钥缺失或不存在 |
+| `403` | 密钥已禁用或模型不在白名单 |
+| `429` | 超出配额 |
 
 ---
 
-## 外部 API（智能体 / 客户端调用）
+## 外部 API
 
-### POST /v1/chat/completions — 对话 / 视觉
+### POST /v1/chat/completions
 
-OpenAI 兼容格式。支持 `stream`、`tools`、`response_format`。
+OpenAI 兼容的对话 / 视觉入口。支持 `stream`、`tools`、`response_format`，具体能力取决于模型配置。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/chat/completions \
-  -H "Authorization: Bearer sk-kemo-admin" \
+  -H "Authorization: Bearer sk-your-client-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepseek-deepseek-v4-flash",
+    "model": "your-provider-your-model-chat",
     "messages": [{"role": "user", "content": "你好"}],
     "max_tokens": 200,
     "stream": false
   }'
 ```
 
-可用模型（`chat` / `vision.*` 能力）：
+模型必须在 `config/models.json` 中暴露，并包含 `chat` 或 `vision.*` capability。
 
-| 模型 ID | 厂商模型 | 能力 | 模态 |
-|---------|---------|------|------|
-| `deepseek-deepseek-v4-flash` | deepseek-v4-flash | chat | 文本 |
-| `deepseek-deepseek-v4-pro` | deepseek-v4-pro | chat | 文本 |
-| `stepfun-step-3.7-flash` | step-3.7-flash | chat, vision.image | 文本·图片·视频 |
-| `stepfun-step-3.5-flash-2603` | step-3.5-flash-2603 | chat | 文本 |
-| `stepfun-step-3.5-flash` | step-3.5-flash | chat | 文本 |
-| `stepfun-step-router-v1` | step-router-v1 | chat | 文本 |
-
-**注意**: `/v1/chat/completions` 接受 `chat` 和 `vision.*` 能力的模型，传入仅有 `audio.*` / `image.*` 能力的模型会返回 `400 capability_mismatch`。
-
----
-
-### POST /v1/audio/speech — 文本转语音 (TTS)
+### POST /v1/audio/speech
 
 OpenAI TTS 兼容格式。返回音频二进制流。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/audio/speech \
-  -H "Authorization: Bearer sk-kemo-admin" \
+  -H "Authorization: Bearer sk-your-client-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "stepfun-stepaudio-2.5-tts",
+    "model": "your-provider-your-model-tts",
     "input": "你好世界",
-    "voice": "cixingnansheng",
+    "voice": "default",
     "response_format": "mp3",
     "speed": 1.0
   }' --output output.mp3
 ```
 
-**参数**:
+模型必须包含 `audio.tts` capability。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| model | string | 是 | `stepfun-stepaudio-2.5-tts` |
-| input | string | 是 | 合成文本，最大 1000 字符 |
-| voice | string | 是 | 音色名称 |
-| response_format | string | 否 | `mp3`(默认) / `wav` / `flac` / `opus` / `pcm` |
-| speed | float | 否 | 语速 0.5~2.0，默认 1.0 |
+### POST /v1/audio/transcriptions
 
-**Content-Type**: 根据 `response_format` 返回对应 MIME 类型。
-
----
-
-### POST /v1/audio/transcriptions — 语音转文字 (ASR)
-
-OpenAI transcription 兼容格式。multipart/form-data 上传。
+OpenAI transcription 兼容格式。使用 `multipart/form-data` 上传音频。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/audio/transcriptions \
-  -H "Authorization: Bearer sk-kemo-admin" \
+  -H "Authorization: Bearer sk-your-client-key" \
   -F "file=@audio.wav" \
-  -F "model=stepfun-stepaudio-2.5-asr" \
+  -F "model=your-provider-your-model-asr" \
   -F "language=zh"
 ```
 
-**参数**:
+模型必须包含 `audio.asr` capability。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| file | file | 是 | 音频文件 (wav/mp3/ogg/pcm) |
-| model | string | 是 | `stepfun-stepaudio-2.5-asr` |
-| language | string | 否 | 语言，默认 `zh` |
+### POST /v1/images/edits
 
-**返回**:
-
-```json
-{
-  "text": "识别出的文本",
-  "model": "stepaudio-2.5-asr"
-}
-```
-
----
-
-### POST /v1/images/edits — 图像编辑
-
-OpenAI images.edit 兼容格式。multipart/form-data 上传。
+OpenAI images edit 兼容格式。使用 `multipart/form-data` 上传图片。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/images/edits \
-  -H "Authorization: Bearer sk-kemo-admin" \
+  -H "Authorization: Bearer sk-your-client-key" \
   -F "image=@photo.png" \
   -F "prompt=变成黑白风格" \
-  -F "model=stepfun-step-image-edit-2" \
+  -F "model=your-provider-your-model-image-edit" \
   -F "response_format=url"
 ```
 
-**参数**:
+模型必须包含 `image.edit` capability。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| image | file | 是 | 输入图片 (jpg/png/webp) |
-| prompt | string | 是 | 编辑描述，最大 512 字符 |
-| model | string | 是 | `stepfun-step-image-edit-2` |
-| response_format | string | 否 | `url`(默认) / `b64_json` |
+### 预留端点
 
-**返回**:
+以下端点只有在注册对应 capability 的 provider 后才可用:
 
-```json
-{
-  "created": 1589478378,
-  "data": [
-    {
-      "url": "https://...",
-      "finish_reason": "success",
-      "seed": 123838
-    }
-  ]
-}
-```
+| 端点 | capability |
+|------|------------|
+| `POST /v1/images/generations` | `image.generation` |
+| `POST /v1/embeddings` | `embedding` |
+| `POST /v1/rerank` | `rerank` |
+| `POST /v1/videos/generations` | `video.*` |
+| `GET /v1/videos/{job_id}` | `video.*` |
+| `GET /v1/videos/{job_id}/content` | `video.*` |
 
 ---
 
-### POST /v1/images/generations — 文生图
+## 管理 API
 
-```
-预留端点。当前未注册 image.generation 模型，调用返回 503。
-```
+管理 API 供 Web 面板调用。默认仓库恢复后 provider 和模型均为空。
 
-```bash
-curl -X POST http://127.0.0.1:8741/v1/images/generations \
-  -H "Authorization: Bearer sk-kemo-admin" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "...", "prompt": "...", "n": 1, "size": "1024x1024"}'
-```
-
----
-
-### POST /v1/embeddings — 文本嵌入
-
-```
-预留端点。当前未注册 embedding 模型，调用返回 503。
-```
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/embeddings \
-  -H "Authorization: Bearer sk-kemo-admin" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "...", "input": "text to embed"}'
-```
-
----
-
-### POST /v1/rerank — 文档重排
-
-```
-预留端点。当前未注册 rerank 模型，调用返回 503。
-```
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/rerank \
-  -H "Authorization: Bearer sk-kemo-admin" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "...", "query": "search query", "documents": ["doc1", "doc2"], "top_n": 3}'
-```
-
----
-
-### POST /v1/videos/generations — 视频生成
-
-```
-预留端点。当前未实现 video adapter，调用返回 503。
-```
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/videos/generations \
-  -H "Authorization: Bearer sk-kemo-admin" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "...", "prompt": "..."}'
-```
-
----
-
-### GET /v1/videos/{job_id} — 查询视频任务
-
-```
-预留端点。查询异步视频任务状态。
-```
-
-### GET /v1/videos/{job_id}/content — 下载视频结果
-
-```
-预留端点。下载完成的视频文件。
-```
-
----
-
-## 管理 API（项目面板调用，无需鉴权）
-
-### GET /api/health — 健康检查
+### GET /api/health
 
 ```bash
 curl http://127.0.0.1:8741/api/health
 ```
 
+默认空配置示例:
+
 ```json
 {
-  "health_score": 100,
-  "providers_online": 2,
-  "providers_total": 2,
-  "models_exposed": 9,
-  "models_visible": 9,
+  "health_score": 70,
+  "providers_online": 0,
+  "providers_total": 0,
+  "models_exposed": 0,
+  "models_visible": 0,
   "error_rate_pct": 0.0,
   "server_version": "0.1.0",
   "quota_enabled": true,
-  "base_url": "http://127.0.0.1:8741"
+  "base_url": "127.0.0.1:8741"
 }
 ```
 
----
-
-### GET /api/stats — 仪表盘统计
+### GET /api/stats
 
 ```bash
 curl "http://127.0.0.1:8741/api/stats?period=today"
 ```
 
-参数: `period` = `today` / `7d` / `30d`
+`period` 可选: `today` / `7d` / `30d`。
 
----
-
-### GET /api/providers — Provider 列表
+### GET /api/providers
 
 ```bash
 curl http://127.0.0.1:8741/api/providers
 ```
 
+默认返回:
+
 ```json
 {
-  "providers": [
-    {
-      "name": "stepfun",
-      "enabled": true,
-      "base_url": "https://api.stepfun.com",
-      "modules": ["chat", "token_count", "audio", "image"],
-      "capabilities": ["chat", "audio", "image", "token_count"],
-      "models": ["step-3.7-flash", "stepaudio-2.5-tts", "stepaudio-2.5-asr", "step-image-edit-2", ...]
-    }
-  ]
+  "providers": []
 }
 ```
 
----
-
-### POST /api/providers/{name}/toggle — 启用/禁用 Provider
+### POST /api/providers/{name}/toggle
 
 ```bash
-curl -X POST http://127.0.0.1:8741/api/providers/stepfun/toggle \
+curl -X POST http://127.0.0.1:8741/api/providers/your-provider/toggle \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
 ```
 
----
-
-### GET /api/models — 模型路由表
+### GET /api/models
 
 ```bash
 curl http://127.0.0.1:8741/api/models
 ```
 
+默认返回:
+
 ```json
 {
-  "models": [
-    {
-      "id": "stepfun-step-3.7-flash",
-      "provider": "stepfun",
-      "model": "step-3.7-flash",
-      "capabilities": ["chat", "vision.image"],
-      "capability": "chat",
-      "endpoint": "/v1/chat/completions",
-      "enabled": true,
-      "visible": true,
-      "modalities": ["text", "image", "video"]
-    }
-  ]
+  "models": []
 }
 ```
 
----
+模型配置示例:
 
-### POST /api/models/{model_id}/toggle — 启用/禁用模型
+```json
+{
+  "your-provider-your-model-chat": {
+    "provider": "your-provider",
+    "model": "your-model-chat",
+    "capabilities": ["chat"],
+    "endpoint": "/v1/chat/completions",
+    "enabled": true,
+    "visible": true
+  }
+}
+```
+
+### POST /api/models/{model_id}/toggle
 
 ```bash
-curl -X POST http://127.0.0.1:8741/api/models/stepfun-step-3.7-flash/toggle \
+curl -X POST http://127.0.0.1:8741/api/models/your-provider-your-model-chat/toggle \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
 ```
 
----
-
-### POST /api/models/{model_id}/test — 模型连通测试
+### POST /api/models/{model_id}/test
 
 ```bash
-curl -X POST http://127.0.0.1:8741/api/models/stepfun-step-3.7-flash/test
+curl -X POST http://127.0.0.1:8741/api/models/your-provider-your-model-chat/test
 ```
 
-```json
-{
-  "ok": true,
-  "capability": "chat",
-  "endpoint": "/v1/chat/completions",
-  "latency_ms": 428.3,
-  "message": "ok",
-  "error": null,
-  "content": "pong"
-}
-```
-
-失败时:
-```json
-{
-  "ok": false,
-  "capability": "audio.tts",
-  "endpoint": "/v1/audio/speech",
-  "message": "StepFunAudioAPIError: ...",
-  "error": "StepFunAudioAPIError: ..."
-}
-```
-
-不同 capability 使用不同的测试策略：
-- `chat` / `vision.*` → ping 消息
-- `audio.tts` → 短文本合成
-- `audio.asr` → 内置极短 WAV 识别
-- `image.edit` → 内置 1x1 PNG 编辑
-- `embedding` / `rerank` → 返回 `not implemented`
-- `video.*` → dry-run 确认
-
----
-
-### GET /api/keys — API 密钥列表
+### GET /api/keys
 
 ```bash
 curl http://127.0.0.1:8741/api/keys
 ```
 
+默认返回:
+
 ```json
 {
-  "keys": [
-    {
-      "id": "sk-kemo-admin",
-      "name": "管理密钥",
-      "enabled": true,
-      "models": ["deepseek-deepseek-v4-flash", "stepfun-step-3.7-flash", ...],
-      "quota": {"total_tokens": 1000000000, "used_tokens": 26}
-    }
-  ]
+  "keys": []
 }
 ```
 
----
+API Key 配置示例:
 
-### POST /api/keys/{key_id}/models — 更新密钥模型白名单
+```json
+{
+  "keys": {
+    "sk-your-client-key": {
+      "name": "客户端密钥",
+      "enabled": true,
+      "models": ["your-provider-your-model-chat"],
+      "quota": {
+        "total_tokens": 1000000,
+        "used_tokens": 0
+      }
+    }
+  }
+}
+```
+
+### POST /api/keys/{key_id}/models
 
 ```bash
-curl -X POST http://127.0.0.1:8741/api/keys/sk-kemo-admin/models \
+curl -X POST http://127.0.0.1:8741/api/keys/sk-your-client-key/models \
   -H "Content-Type: application/json" \
-  -d '{"models": ["deepseek-deepseek-v4-flash", "stepfun-step-3.7-flash"]}'
+  -d '{"models": ["your-provider-your-model-chat"]}'
 ```
 
----
-
-### GET /api/logs — 调用日志
+### GET /api/logs
 
 ```bash
-curl "http://127.0.0.1:8741/api/logs?status=error&limit=20&q=stepfun"
+curl "http://127.0.0.1:8741/api/logs?status=error&limit=20&q=your-provider"
 ```
 
-参数: `status` = `all` / `ok` / `error`、`q` = 搜索关键词、`date` = 日期 (默认今日)、`limit` = 条数 (默认 50)
+参数:
 
----
+| 参数 | 说明 |
+|------|------|
+| `status` | `all` / `ok` / `error` |
+| `q` | 搜索关键词 |
+| `date` | 日期，默认今日 |
+| `limit` | 条数，默认 50 |
 
-### GET /api/usage — 用量统计
+### GET /api/usage
 
 ```bash
 curl "http://127.0.0.1:8741/api/usage?period=today"
 ```
 
-参数: `period` = `today` / `7d` / `30d`
+`period` 可选: `today` / `7d` / `30d`。
 
-```json
-{
-  "period": "today",
-  "request_count": 42,
-  "total_tokens": 123456,
-  "latency": {"p50_ms": 234.5, "p95_ms": 890.1, "p99_ms": 1200.3}
-}
-```
-
----
-
-### GET /api/config — 读取全部配置
+### GET /api/config
 
 ```bash
 curl http://127.0.0.1:8741/api/config
 ```
 
-返回 `config.json`、`models.json`、`api_keys.json`、`global_prompt.md`、`provider.env` 全部内容。
+返回 `config.json`、`models.json`、`api_keys.json`、`global_prompt.md`、`provider.env` 的当前内容。
 
----
-
-### POST /api/config/{file} — 保存配置文件
+### POST /api/config/{file}
 
 ```bash
 curl -X POST http://127.0.0.1:8741/api/config/models \
   -H "Content-Type: application/json" \
-  -d '{"content": {...}}'
+  -d '{"content": {}}'
 ```
 
-`file` 取值: `config` / `models` / `api_keys` / `global_prompt` / `provider_env`。
+`file` 取值:
 
-保存后自动重载相关模块（Router / Registry / Auth）。
+| file | 写入目标 |
+|------|----------|
+| `config` | `config/config.json` |
+| `models` | `config/models.json` |
+| `api_keys` | `config/api_keys.json` |
+| `global_prompt` | `config/global_prompt.md` |
+| `provider_env` | `provider.env` |
+
+保存后会自动重载相关模块。
 
 ---
 
-## 能力分类总览
+## Capability 总览
 
-| Capability | 对应端点 | 已注册模型 |
-|-----------|---------|-----------|
-| `chat` | `/v1/chat/completions` | deepseek×2, stepfun×4 |
-| `vision.image` | `/v1/chat/completions` | stepfun×1 (step-3.7-flash) |
-| `vision.video` | `/v1/chat/completions` | — |
-| `audio.tts` | `/v1/audio/speech` | stepfun×1 |
-| `audio.asr` | `/v1/audio/transcriptions` | stepfun×1 |
-| `audio.speech_to_speech` | (预留) | — |
-| `image.generation` | `/v1/images/generations` | — |
-| `image.edit` | `/v1/images/edits` | stepfun×1 |
-| `video.*` | `/v1/videos/generations` | — |
-| `embedding` | `/v1/embeddings` | — |
-| `rerank` | `/v1/rerank` | — |
+| Capability | 对应端点 |
+|------------|----------|
+| `chat` | `/v1/chat/completions` |
+| `vision.image` | `/v1/chat/completions` |
+| `vision.video` | `/v1/chat/completions` |
+| `audio.tts` | `/v1/audio/speech` |
+| `audio.asr` | `/v1/audio/transcriptions` |
+| `audio.speech_to_speech` | 预留 |
+| `image.generation` | `/v1/images/generations` |
+| `image.edit` | `/v1/images/edits` |
+| `video.*` | `/v1/videos/generations` |
+| `embedding` | `/v1/embeddings` |
+| `rerank` | `/v1/rerank` |
 
 ---
 
@@ -488,4 +354,4 @@ curl -X POST http://127.0.0.1:8741/api/config/models \
 }
 ```
 
-错误类型: `capability_mismatch` / `auth_error` / `quota_exceeded` / `provider_error` / `invalid_request`。
+常见错误类型: `capability_mismatch` / `auth_error` / `quota_exceeded` / `provider_error` / `invalid_request`。

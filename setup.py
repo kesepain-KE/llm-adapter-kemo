@@ -14,9 +14,21 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import json
+import shutil
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+
+DEFAULT_CONFIG_JSON = {
+    "providers": {}
+}
+
+DEFAULT_MODELS_JSON = {}
+
+DEFAULT_API_KEYS_JSON = {
+    "keys": {}
+}
 
 # =============================================================================
 # 环境检查
@@ -27,7 +39,7 @@ def check_python() -> bool:
     v = sys.version_info
     ok = v >= (3, 10)
     tag = "OK" if ok else "需要 >= 3.10"
-    print(f"  Python {v.major}.{v.minor}.{v.micro}  → {tag}")
+    print(f"  Python {v.major}.{v.minor}.{v.micro}  -> {tag}")
     if not ok:
         print("\n  请升级 Python: https://www.python.org/downloads/")
     return ok
@@ -56,10 +68,61 @@ def check_deps() -> bool:
 
 
 def init_dirs() -> None:
+    (PROJECT_ROOT / "config").mkdir(parents=True, exist_ok=True)
     (PROJECT_ROOT / "data_status" / "call_log").mkdir(parents=True, exist_ok=True)
     (PROJECT_ROOT / "provider").mkdir(parents=True, exist_ok=True)
-    print("  data_status/call_log/  → OK")
-    print("  provider/              → OK")
+    print("  config/                -> OK")
+    print("  data_status/call_log/  -> OK")
+    print("  provider/              -> OK")
+
+
+def _write_json_if_missing(rel_path: str, payload: dict) -> bool:
+    path = PROJECT_ROOT / rel_path
+    if path.exists():
+        print(f"  {rel_path:<28} -> exists")
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(f"  {rel_path:<28} -> created")
+    return True
+
+
+def _write_text_if_missing(rel_path: str, content: str = "") -> bool:
+    path = PROJECT_ROOT / rel_path
+    if path.exists():
+        print(f"  {rel_path:<28} -> exists")
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    print(f"  {rel_path:<28} -> created")
+    return True
+
+
+def _copy_if_missing(src_rel: str, dst_rel: str) -> bool:
+    src = PROJECT_ROOT / src_rel
+    dst = PROJECT_ROOT / dst_rel
+    if dst.exists():
+        print(f"  {dst_rel:<28} -> exists")
+        return False
+    if not src.is_file():
+        print(f"  {dst_rel:<28} -> skip (missing {src_rel})")
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+    print(f"  {dst_rel:<28} -> created from {src_rel}")
+    return True
+
+
+def init_runtime_files() -> None:
+    """生成首次运行所需文件；只补缺失文件，不覆盖已有配置。"""
+    _copy_if_missing("provider.env.example", "provider.env")
+    _write_json_if_missing("config/config.json", DEFAULT_CONFIG_JSON)
+    _write_json_if_missing("config/models.json", DEFAULT_MODELS_JSON)
+    _write_json_if_missing("config/api_keys.json", DEFAULT_API_KEYS_JSON)
+    _write_text_if_missing("config/global_prompt.md")
 
 
 # =============================================================================
@@ -90,7 +153,9 @@ def install_deps() -> bool:
 # =============================================================================
 
 
-def validate() -> bool:
+def validate(ensure_files: bool = True) -> bool:
+    if ensure_files:
+        init_runtime_files()
     sys.path.insert(0, str(PROJECT_ROOT))
     try:
         from core import bootstrap
@@ -102,7 +167,7 @@ def validate() -> bool:
         print(f"  Providers : {len(providers)} ({', '.join(providers)})")
         print(f"  Models    : {len(models)} visible")
         for m in models:
-            print(f"    {m['id']} → {m['provider']}/{m['model']}")
+            print(f"    {m['id']} -> {m['provider']}/{m['model']}")
         print(f"  API Keys  : {len(keys)}")
         for k in keys:
             name = k.get("name", "")
@@ -177,18 +242,19 @@ def wizard(skip_install: bool = False) -> None:
         sys.exit(1)
     deps_ok = check_deps()
 
-    print("\n[2/4] 目录初始化")
+    print("\n[2/4] 目录与默认配置初始化")
     init_dirs()
+    init_runtime_files()
 
     if not skip_install and not deps_ok:
         ans = input("\n[3/4] 是否安装依赖? [Y/n]: ").strip().lower()
         if ans in ("", "y", "yes"):
             install_deps()
     else:
-        print("\n[3/4] 依赖 → 跳过")
+        print("\n[3/4] 依赖 -> 跳过")
 
     print("\n[4/4] 核心验证")
-    ok = validate()
+    ok = validate(ensure_files=False)
 
     show_key_hint()
 

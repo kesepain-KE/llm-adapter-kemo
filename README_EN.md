@@ -61,16 +61,16 @@ cd llm-adapter-kemo
 python setup.py
 ```
 
-`setup.py` is the initialization wizard. It runs Python version checks, dependency detection (prompts to install if missing), creates required directories (`data_status/call_log/` and `provider/`), and validates core modules. Use `python setup.py --check` for a quick environment check, `--install` for dependency installation only, or `--validate` for core validation only.
+`setup.py` is the initialization wizard. It runs Python version checks, dependency detection (prompts to install if missing), creates required directories (`config/`, `data_status/call_log/`, and `provider/`), restores empty runtime config files when they are missing, and validates core modules. Use `python setup.py --check` for a quick environment check, `--install` for dependency installation only, or `--validate` for core validation only.
 
 ### Configuration
 
-```bash
-# Copy example config files
-cp provider.env.example provider.env
-cp config/api_keys.json.example config/api_keys.json
-cp config/models.json.example config/models.json
-```
+`python setup.py` creates empty runtime config on first run:
+
+- `provider.env` copied from `provider.env.example`
+- `config/config.json` defaults to `{"providers": {}}`
+- `config/models.json` defaults to `{}`
+- `config/api_keys.json` defaults to `{"keys": {}}`
 
 Two approaches to configure provider API keys:
 
