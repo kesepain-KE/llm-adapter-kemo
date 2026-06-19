@@ -1,3 +1,4 @@
+import AuthGate, { useAuth } from './AuthGate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from './api';
 import Select from './components/Select';
@@ -39,7 +40,12 @@ const NAV_ITEMS = [
   ['settings', '配置'],
 ];
 
-const PERIOD_OPTIONS = [
+const DASHBOARD_PERIOD_OPTIONS = [
+  { value: 'today', label: '今日' },
+  { value: '7d', label: '7 天' },
+];
+
+const USAGE_PERIOD_OPTIONS = [
   { value: 'today', label: '今日' },
   { value: '7d', label: '7 天' },
   { value: '30d', label: '30 天' },
@@ -50,6 +56,8 @@ const LOG_STATUS_OPTIONS = [
   { value: 'ok', label: '成功', tone: 'ok' },
   { value: 'error', label: '错误', tone: 'bad' },
 ];
+
+const MODEL_LINE_COLORS = ['#6d5dfc', '#10a9c7', '#df5f83'];
 
 function getInitialSection() {
   const section = window.location.hash.slice(1);
@@ -106,29 +114,144 @@ function MetricCard({ tone = '', label, delta, value, foot }) {
   );
 }
 
-function buildTrendPaths(data) {
-  if (!data?.length) {
-    return { area: '', lineA: '', lineB: '', maxRequests: '--' };
+function makeSmoothPath(points) {
+  if (!points.length) return '';
+  if (points.length === 1) return `M${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  let path = `M${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    path += ` C${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
   }
-  const width = 620;
-  const padLeft = 22;
-  const padRight = 20;
-  const top = 30;
-  const bottom = 175;
-  const x = (i) => padLeft + (i / Math.max(data.length - 1, 1)) * (width - padLeft - padRight);
-  const maxRequests = Math.max(...data.map((item) => item.requests || 0), 1);
-  const y = (value) => bottom - (value / maxRequests) * (bottom - top);
-  const lineA = data.map((item, index) => `${index === 0 ? 'M' : 'L'}${x(index).toFixed(0)} ${y(item.requests || 0).toFixed(0)}`).join(' ');
-  const area = `${lineA} L${x(data.length - 1).toFixed(0)} ${bottom} L${padLeft.toFixed(0)} ${bottom} Z`;
-  const hasCache = data.some((item) => item.cache_hit != null);
-  const maxCache = Math.max(...data.map((item) => item.cache_hit || 0), 1);
-  const lineB = hasCache
-    ? data.map((item, index) => `${index === 0 ? 'M' : 'L'}${x(index).toFixed(0)} ${y((item.cache_hit || 0) * maxRequests / maxCache).toFixed(0)}`).join(' ')
-    : '';
-  return { area, lineA, lineB, maxRequests: fmtNum(maxRequests) };
+  return path;
 }
 
-function AppBar({ activeSection, baseUrl, onNavigate }) {
+function trendDateLabel(date) {
+  return (date || '').slice(5) || '--';
+}
+
+function buildTopModelSeries(trend, entries) {
+  const dates = (trend || []).map((item) => item.date).filter(Boolean);
+  if (!dates.length || !entries?.length) return [];
+  const dateIndex = new Map(dates.map((date, index) => [date, index]));
+  const byModel = {};
+
+  for (const entry of entries) {
+    const model = entry.model || 'unknown';
+    const date = entry._trendDate || String(entry.timestamp || '').slice(0, 10);
+    const index = dateIndex.get(date);
+    if (index == null) continue;
+    if (!byModel[model]) {
+      byModel[model] = {
+        model,
+        values: Array(dates.length).fill(0),
+        total: 0,
+      };
+    }
+    byModel[model].values[index] += 1;
+    byModel[model].total += 1;
+  }
+
+  const all = Object.values(byModel).sort((a, b) => b.total - a.total).slice(0, 3);
+  const grandTotal = all.reduce((sum, item) => sum + item.total, 0) || 1;
+  return all.map((item, index) => ({
+    ...item,
+    color: MODEL_LINE_COLORS[index],
+    pct: item.total / grandTotal * 100,
+  }));
+}
+
+function buildTrendVisual(data, modelSeries = []) {
+  if (!data?.length) {
+    return {
+      width: 720,
+      height: 260,
+      bars: [],
+      area: '',
+      totalLine: '',
+      ticks: [],
+      modelLines: [],
+      avg: 0,
+      maxRequests: 0,
+      latestRequests: 0,
+      peak: null,
+      baselineY: 0,
+      peakLabel: null,
+    };
+  }
+  const width = 720;
+  const height = 260;
+  const padLeft = 54;
+  const padRight = 28;
+  const top = 28;
+  const bottom = 206;
+  const plotWidth = width - padLeft - padRight;
+  const x = (i) => padLeft + (i / Math.max(data.length - 1, 1)) * (width - padLeft - padRight);
+  const maxRequests = Math.max(...data.map((item) => item.requests || 0), 1);
+  const avg = data.reduce((sum, item) => sum + (item.requests || 0), 0) / data.length;
+  const scaleMax = Math.max(maxRequests, avg, ...modelSeries.flatMap((item) => item.values), 1);
+  const niceMax = Math.max(1, Math.ceil(scaleMax * 1.18));
+  const y = (value) => bottom - (value / niceMax) * (bottom - top);
+  const points = data.map((item, index) => ({ x: x(index), y: y(item.requests || 0), value: item.requests || 0, date: item.date }));
+  const totalLine = makeSmoothPath(points);
+  const area = `${totalLine} L${points[points.length - 1].x.toFixed(1)} ${bottom} L${points[0].x.toFixed(1)} ${bottom} Z`;
+  const barWidth = Math.min(34, Math.max(12, plotWidth / Math.max(data.length, 1) * 0.42));
+  const bars = data.map((item, index) => {
+    const value = item.requests || 0;
+    const barY = y(value);
+    return {
+      date: item.date,
+      label: trendDateLabel(item.date),
+      value,
+      x: x(index) - barWidth / 2,
+      y: barY,
+      width: barWidth,
+      height: Math.max(2, bottom - barY),
+      cx: x(index),
+      labelY: Math.max(top + 12, barY - 10),
+    };
+  });
+  const peak = points.reduce((best, item) => (item.value > best.value ? item : best), points[0]);
+  const peakLabelOffset = peak.y < top + 42 ? 40 : -34;
+  const peakLabel = {
+    x: Math.max(padLeft + 28, Math.min(width - padRight - 34, peak.x)),
+    y: Math.max(top + 18, Math.min(bottom - 20, peak.y + peakLabelOffset)),
+  };
+  const tickValues = [niceMax, Math.round(niceMax * 2 / 3), Math.round(niceMax / 3), 0]
+    .filter((value, index, arr) => arr.indexOf(value) === index);
+  const ticks = tickValues.map((value) => ({ value, y: y(value) }));
+  const modelLines = modelSeries.map((item) => {
+    const linePoints = item.values.map((value, index) => ({ x: x(index), y: y(value), value }));
+    return {
+      ...item,
+      path: makeSmoothPath(linePoints),
+      latest: item.values[item.values.length - 1] || 0,
+    };
+  });
+  return {
+    width,
+    height,
+    bars,
+    area,
+    totalLine,
+    ticks,
+    modelLines,
+    avg,
+    maxRequests,
+    latestRequests: data[data.length - 1]?.requests || 0,
+    peak,
+    baselineY: y(avg),
+    peakLabel,
+  };
+}
+
+function AppBar({ activeSection, baseUrl, onNavigate, onLogout }) {
   return (
     <div className="appbar">
       <div className="identity">
@@ -153,17 +276,22 @@ function AppBar({ activeSection, baseUrl, onNavigate }) {
         <span>base_url</span>
         <b className="base-url-text">{baseUrl || '未配置'}</b>
       </div>
+      <button type="button" className="logout-btn" onClick={onLogout} title="退出登录">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
     </div>
   );
 }
 
-function Overview({ health, stats, statsPeriod, onStatsPeriodChange }) {
-  const trendPaths = useMemo(() => buildTrendPaths(stats?.trend || []), [stats]);
-  const providerBreakdown = stats?.by_provider || [];
-  const providerTotal = providerBreakdown.reduce((sum, item) => sum + (item.total_tokens || 0), 0) || 1;
-  const pins = providerBreakdown.slice(0, 3).map((item) => `${Math.round((item.total_tokens || 0) / providerTotal * 100)}%`);
+function Overview({ health, stats, statsPeriod, onStatsPeriodChange, trendEntries }) {
   const recentCalls = stats?.recent_calls || [];
   const trend = stats?.trend || [];
+  const topModelSeries = useMemo(() => buildTopModelSeries(trend, trendEntries || []), [trend, trendEntries]);
+  const trendVisual = useMemo(() => buildTrendVisual(trend, topModelSeries), [trend, topModelSeries]);
   const latencyDelta = stats?.latency_delta_ms == null
     ? '--'
     : `${stats.latency_delta_ms > 0 ? '+' : ''}${stats.latency_delta_ms}ms`;
@@ -208,44 +336,75 @@ function Overview({ health, stats, statsPeriod, onStatsPeriodChange }) {
       </div>
 
       <div className="grid">
-        <article className="panel span-3">
+        <article className="panel span-12 accent trend-panel">
           <div className="panel-head">
-            <div><h3 className="panel-title">Provider 分布</h3><p className="panel-sub">地域视角展示调用分布。</p></div>
-            <Select value={statsPeriod} options={PERIOD_OPTIONS} onChange={onStatsPeriodChange} />
+            <div><h3 className="panel-title">请求趋势</h3><p className="panel-sub">请求柱状、总量曲线、前三模型与平均基准线。</p></div>
+            <Select value={statsPeriod} options={DASHBOARD_PERIOD_OPTIONS} onChange={onStatsPeriodChange} />
           </div>
-          <div className="world">
-            <svg viewBox="0 0 520 260" aria-hidden="true">
-              <path d="M83 112c32-42 95-57 151-34 38 16 66 12 102-5 51-24 108-11 135 34 21 36-4 75-46 81-48 7-79-24-119-26-55-3-88 36-145 24-54-12-105-38-78-74Z" fill="rgba(23,23,23,.08)" />
-              <path d="M120 129c30-18 72-22 107-11 44 14 68 33 118 20 31-8 65 1 84 24" fill="none" stroke="rgba(52,104,255,.22)" strokeWidth="2" strokeDasharray="6 8" />
-            </svg>
-            <span className="map-pin pin-a">{pins[0] || '—'}</span>
-            <span className="map-pin pin-b">{pins[1] || '—'}</span>
-            <span className="map-pin pin-c">{pins[2] || '—'}</span>
+          <div className="trend-stat-row">
+            <div><span>最新请求</span><b>{fmtNum(trendVisual.latestRequests)}</b></div>
+            <div><span>峰值</span><b>{fmtNum(trendVisual.maxRequests)}</b></div>
+            <div><span>平均基准</span><b>{fmtNum(Math.round(trendVisual.avg))}</b></div>
           </div>
-        </article>
-
-        <article className="panel span-9 accent">
-          <div className="panel-head">
-            <div><h3 className="panel-title">请求趋势</h3><p className="panel-sub">请求量与缓存命中。</p></div>
-            <Select value={statsPeriod} options={PERIOD_OPTIONS} onChange={onStatsPeriodChange} />
-          </div>
-          <div style={{ position: 'relative' }}>
-            <svg className="line-chart" viewBox="0 0 620 200" aria-label="请求趋势图">
+          <div className="trend-chart-shell">
+            <svg className="line-chart trend-chart" viewBox={`0 0 ${trendVisual.width} ${trendVisual.height}`} aria-label="请求趋势图">
               <defs>
                 <linearGradient id="areaBlue" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#3468ff" stopOpacity=".42" />
+                  <stop offset="0%" stopColor="#3468ff" stopOpacity=".30" />
                   <stop offset="100%" stopColor="#3468ff" stopOpacity="0" />
                 </linearGradient>
+                <linearGradient id="barBlue" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#3468ff" stopOpacity=".88" />
+                  <stop offset="100%" stopColor="#9eb6ff" stopOpacity=".28" />
+                </linearGradient>
+                <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#3468ff" floodOpacity=".20" />
+                </filter>
               </defs>
-              <path className="axis-line" d="M20 175H600M20 132H600M20 89H600M20 46H600" />
-              <path className="chart-area" d={trendPaths.area} />
-              <path className="chart-line-a" d={trendPaths.lineA} />
-              <path className="chart-line-b" d={trendPaths.lineB} />
+              {trendVisual.ticks.map((tick) => (
+                <g key={tick.value}>
+                  <line className="axis-line" x1="54" x2="692" y1={tick.y} y2={tick.y} />
+                  <text className="axis-number" x="16" y={tick.y + 4}>{fmtNum(tick.value)}</text>
+                </g>
+              ))}
+              <line className="trend-baseline" x1="54" x2="692" y1={trendVisual.baselineY} y2={trendVisual.baselineY} />
+              <text className="baseline-label" x="610" y={trendVisual.baselineY - 8}>avg {fmtNum(Math.round(trendVisual.avg))}</text>
+              {trendVisual.bars.map((bar, index) => (
+                <g key={bar.date || index} className="trend-bar-group">
+                  <rect className="trend-bar" x={bar.x} y={bar.y} width={bar.width} height={bar.height} rx="7" />
+                  {trend.length <= 14 && bar.value > 0 ? <text className="bar-value" x={bar.cx} y={bar.labelY}>{fmtNum(bar.value)}</text> : null}
+                </g>
+              ))}
+              <path className="chart-area" d={trendVisual.area} />
+              {trendVisual.modelLines.map((line) => (
+                <path key={line.model} className="chart-line-model" d={line.path} stroke={line.color} />
+              ))}
+              <path className="chart-line-a" d={trendVisual.totalLine} filter="url(#lineGlow)" />
+              {trendVisual.bars.map((bar, index) => (
+                <circle key={`${bar.date || index}-dot`} className="trend-dot" cx={bar.cx} cy={bar.y} r={bar.value > 0 ? 3.8 : 2.4} />
+              ))}
+              {trendVisual.bars.map((bar, index) => (
+                <text key={`${bar.date || index}-axis`} className="x-axis-label" x={bar.cx} y="238">{bar.label}</text>
+              ))}
+              {trendVisual.peak && trendVisual.peakLabel ? (
+                <g className="trend-peak-svg" transform={`translate(${trendVisual.peakLabel.x} ${trendVisual.peakLabel.y})`}>
+                  <rect x="-25" y="-17" width="50" height="34" rx="17" />
+                  <text className="trend-peak-value" y="-2">{fmtNum(trendVisual.peak.value)}</text>
+                  <text className="trend-peak-date" y="11">{trendDateLabel(trendVisual.peak.date)}</text>
+                </g>
+              ) : null}
             </svg>
-            <div className="tooltip-bubble mono" style={{ left: '49%', top: '38%' }}>{trendPaths.maxRequests}</div>
           </div>
-          <div className="chart-axis-labels" style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(0, 1fr))` }}>
-            {trend.map((item) => <span key={item.date}>{(item.date || '').slice(5) || '--'}</span>)}
+          <div className="trend-legend">
+            <span className="legend-item total"><i />总请求曲线</span>
+            <span className="legend-item bars"><i />请求柱</span>
+            {trendVisual.modelLines.length ? trendVisual.modelLines.map((item) => (
+              <span className="legend-item model" key={item.model}>
+                <i style={{ background: item.color }} />
+                <b>{item.model}</b>
+                <em>{fmtNum(item.total)} req</em>
+              </span>
+            )) : <span className="legend-empty">暂无模型曲线</span>}
           </div>
         </article>
 
@@ -548,7 +707,7 @@ function Usage({ usage, usagePeriod, onUsagePeriodChange }) {
         <article className="panel span-12 accent">
           <div className="panel-head">
             <div><h3 className="panel-title">Provider 精细化统计</h3><p className="panel-sub">请求数 · Token · 延迟 · 错误率。</p></div>
-            <Select value={usagePeriod} options={PERIOD_OPTIONS} onChange={onUsagePeriodChange} id="usage-period" />
+            <Select value={usagePeriod} options={USAGE_PERIOD_OPTIONS} onChange={onUsagePeriodChange} id="usage-period" />
           </div>
           <div className="table-wrap">
             <table>
@@ -616,6 +775,7 @@ function Settings({ promptText, onPromptTextChange, onRefreshPrompt, onSavePromp
 }
 
 export default function App() {
+  const auth = useAuth();
   const [activeSection, setActiveSection] = useState(getInitialSection);
   const [toast, setToast] = useState({ message: '已完成', visible: false });
   const [health, setHealth] = useState(null);
@@ -624,6 +784,7 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [keysList, setKeysList] = useState([]);
   const [logs, setLogs] = useState(null);
+  const [trendEntries, setTrendEntries] = useState([]);
   const [usage, setUsage] = useState(null);
   const [promptText, setPromptText] = useState('loading...');
   const [statsPeriod, setStatsPeriod] = useState('today');
@@ -697,6 +858,24 @@ export default function App() {
     }
   }, []);
 
+  const loadTrendEntries = useCallback(async (dates) => {
+    const cleanDates = dates.filter(Boolean);
+    if (!cleanDates.length) {
+      setTrendEntries([]);
+      return;
+    }
+    try {
+      const results = await Promise.all(cleanDates.map(async (date) => {
+        const data = await apiRequest(`/logs?date=${encodeURIComponent(date)}&limit=1000`);
+        return (data.entries || []).map((entry) => ({ ...entry, _trendDate: date }));
+      }));
+      setTrendEntries(results.flat());
+    } catch (error) {
+      console.error('trend logs:', error);
+      setTrendEntries([]);
+    }
+  }, []);
+
   const loadUsage = useCallback(async (period) => {
     try {
       setUsage(await apiRequest(`/usage?period=${period}`));
@@ -724,27 +903,68 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    Promise.allSettled([
-      loadHealth(),
-      loadProviders(),
-      loadModels(),
-      loadKeys(),
-      loadConfig(),
-    ]);
-  }, [loadHealth, loadProviders, loadModels, loadKeys, loadConfig]);
+    if (!auth.isAuthenticated) return;
+    loadConfig();
+  }, [auth.isAuthenticated, loadConfig]);
 
   useEffect(() => {
+    if (!auth.isAuthenticated) return;
     loadStats(statsPeriod);
-  }, [statsPeriod, loadStats]);
+  }, [auth.isAuthenticated, statsPeriod, loadStats]);
+
+  const trendDatesKey = useMemo(() => (stats?.trend || []).map((item) => item.date).filter(Boolean).join(','), [stats]);
 
   useEffect(() => {
+    if (!auth.isAuthenticated || !trendDatesKey) {
+      setTrendEntries([]);
+      return;
+    }
+    loadTrendEntries(trendDatesKey.split(','));
+  }, [auth.isAuthenticated, trendDatesKey, loadTrendEntries]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
     loadUsage(usagePeriod);
-  }, [usagePeriod, loadUsage]);
+  }, [auth.isAuthenticated, usagePeriod, loadUsage]);
 
   useEffect(() => {
+    if (!auth.isAuthenticated) return;
     const timer = window.setTimeout(() => loadLogs(logStatus, logSearch.trim()), 150);
     return () => window.clearTimeout(timer);
-  }, [logStatus, logSearch, loadLogs]);
+  }, [auth.isAuthenticated, logStatus, logSearch, loadLogs]);
+
+  // 高频轮询：仪表盘数据 + 日志（每 10 秒自动刷新）
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    const poll = () => {
+      loadHealth();
+      loadStats(statsPeriod);
+      loadLogs(logStatus, logSearch.trim());
+    };
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => clearInterval(id);
+  }, [auth.isAuthenticated, statsPeriod, logStatus, logSearch, loadHealth, loadStats, loadLogs]);
+
+  // 低频轮询：Provider 注册表 + 模型路由表（每 30 秒）
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    loadProviders();
+    loadModels();
+    const id = setInterval(() => {
+      loadProviders();
+      loadModels();
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [auth.isAuthenticated, loadProviders, loadModels]);
+
+  // 独立低频：API 密钥（每 60 秒）
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    loadKeys();
+    const id = setInterval(() => loadKeys(), 60_000);
+    return () => clearInterval(id);
+  }, [auth.isAuthenticated, loadKeys]);
 
   function navigate(sectionId) {
     setActiveSection(sectionId);
@@ -834,7 +1054,7 @@ export default function App() {
   }
 
   const activeView = {
-    overview: <Overview health={health} stats={stats} statsPeriod={statsPeriod} onStatsPeriodChange={setStatsPeriod} />,
+    overview: <Overview health={health} stats={stats} statsPeriod={statsPeriod} onStatsPeriodChange={setStatsPeriod} trendEntries={trendEntries} />,
     providers: <Providers providers={providers} onToggleProvider={toggleProvider} />,
     models: <Models models={models} modelTests={modelTests} onToggleModel={toggleModel} onTestModel={testModel} />,
     keys: <Keys keysList={keysList} models={models} onToggleKeyModel={toggleKeyModel} />,
@@ -844,18 +1064,19 @@ export default function App() {
   }[activeSection];
 
   return (
-    <>
+    <AuthGate auth={auth}>
       <div className="page">
         <div className="shell glass">
           <AppBar
             activeSection={activeSection}
             baseUrl={health?.base_url || ''}
             onNavigate={navigate}
+            onLogout={auth.logout}
           />
           <main className="content">{activeView}</main>
         </div>
       </div>
       <div className={`toast${toast.visible ? ' show' : ''}`}>{toast.message}</div>
-    </>
+    </AuthGate>
   );
 }

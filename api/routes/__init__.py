@@ -7,6 +7,7 @@ from .keys import api_keys, api_keys_models
 from .logs import api_logs
 from .usage import api_usage
 from .config import api_config, api_config_save
+from .auth import api_auth_login, AuthMiddleware
 from .v1 import chat_completions
 from .v1_audio import audio_speech, audio_transcriptions
 from .v1_image import image_generations, image_edits
@@ -24,6 +25,7 @@ __all__ = [
     "api_logs",
     "api_usage",
     "api_config", "api_config_save",
+    "api_auth_login", "AuthMiddleware",
     "chat_completions",
     "audio_speech", "audio_transcriptions",
     "image_generations", "image_edits",

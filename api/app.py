@@ -17,6 +17,7 @@ from api.routes import (
     api_logs,
     api_usage,
     api_config, api_config_save,
+    api_auth_login, AuthMiddleware,
     chat_completions,
     audio_speech, audio_transcriptions,
     image_generations, image_edits,
@@ -36,6 +37,9 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# ---- 鉴权中间件 (必须在路由注册之前) ----
+app.add_middleware(AuthMiddleware)
+
 # ---- Web ----
 web_dist = PROJECT_ROOT / "web" / "dist"
 web_assets = web_dist / "assets"
@@ -46,6 +50,9 @@ app.add_api_route("/", web_panel, methods=["GET"], response_class=None)
 
 # ---- /v1/chat/completions ----
 app.add_api_route("/v1/chat/completions", chat_completions, methods=["POST"])
+
+# ---- /api/auth ----
+app.add_api_route("/api/auth/login", api_auth_login, methods=["POST"])
 
 # ---- /api/health ----
 app.add_api_route("/api/health", api_health, methods=["GET"])

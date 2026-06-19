@@ -1,8 +1,28 @@
 const BASE = '/api';
+const SESSION_KEY = 'kemo_auth_session';
+
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data && data.token && data.expires > Date.now()) return data.token;
+  } catch { /* ignore */ }
+  return null;
+}
 
 export async function apiRequest(path, options = {}) {
+  const token = getAuthToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers,
     ...options,
   });
 
