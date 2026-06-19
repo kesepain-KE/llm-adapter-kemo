@@ -337,24 +337,9 @@ function Models({ models, modelTests, onToggleModel, onTestModel }) {
                     {(() => {
                       const caps = model.capabilities || (model.capability ? [model.capability] : null);
                       if (!caps || !caps.length) return <span className="badge" style={{ opacity: 0.4 }}>—</span>;
-                      // 按顶层能力去重提取 emoji
-                      const seenTop = new Set();
-                      const emojis = [];
-                      caps.forEach((cap) => {
-                        const top = cap.split('.')[0];
-                        if (!seenTop.has(top) && CAPABILITY_EMOJI[top]) {
-                          seenTop.add(top);
-                          emojis.push(CAPABILITY_EMOJI[top]);
-                        }
-                      });
-                      return (
-                        <>
-                          {caps.map((cap) => (
-                            <Badge tone="blue" key={cap}>{CAPABILITY_LABELS[cap] || cap}</Badge>
-                          ))}
-                          {emojis.map((emoji, i) => <span key={i}>{emoji}</span>)}
-                        </>
-                      );
+                      return caps.map((cap) => (
+                        <Badge tone="blue" key={cap}>{CAPABILITY_LABELS[cap] || cap}</Badge>
+                      ));
                     })()}
                   </td>
                   <td>

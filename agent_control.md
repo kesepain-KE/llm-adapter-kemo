@@ -1,5 +1,35 @@
 # Kemo LLM Adapter — Agent 操作手册
 
+> **工作流索引 →** 详见 `add_diy/` 目录下的各流程文件。
+
+---
+
+## 新厂商接入工作流
+
+按照以下顺序执行，**不要跳过**：
+
+**① 读取厂商 API 文档、用户提供的 key 和 base_url**
+→ 了解请求/响应格式、端点、鉴权方式、能力范围。
+
+**② 最小化连通测试**
+→ 用厂商原生端点（curl / Python）确认 key 和 base_url 有效。
+→ 拉取厂商模型列表，询问用户需要接入哪些模型。
+
+**③ 读取接入指南**
+→ 打开 `add_diy/build_adapter.md`，按流程在本项目注册新厂商。
+
+**④ 读取厂商文档，编写适配模块**
+→ 按需实现 `chat.py`、`token_count.py`、`audio.py`、`image.py` 等。
+→ 注册至 `provider/<厂商名>/` 目录，完成 `model.json` 和 `__init__.py`。
+
+**⑤ 批量测试能力**
+→ 对每个已注册模型分层测试（chat / vision / audio / image / embedding），在 models.json 中标上正确的能力标签。
+
+**⑥ 完成收尾**
+→ 告知用户注册成功，并提供新模型的暴露名、能力概览、调用方式。
+→ **如需特殊说明**（如音色映射、厂商限制、尺寸规格、价格、参数差异等），在 `provider/<厂商名>/explain.md` 中记录，便于后续查阅。
+→ **确保新厂商的模型完全适配本项目的模型注册与使用机制**：命名规则 `{provider}-{vendor_model}`、热加载、OpenAI 兼容响应格式、API Key 鉴权与白名单。若厂商接口与本项目规范有差异，通过适配层（adapter）抹平，不绕过统一框架。
+
 > 本文件是**入口索引**，指引 AI Agent 找到具体的操作流程文件。
 >
 > 各流程的完整步骤在 `add_diy/` 目录下，**请勿跳过直接操作**。
@@ -18,7 +48,7 @@
 ## 项目速览
 
 ```
-kemo-llm-adapter/
+llm-adapter-kemo/
 ├── add_diy/                 ← 🎯 操作指引 + 工具
 │   ├── build_adapter.md     ← 新厂商接入（7 步完整流程）
 │   ├── build_key.md         ← 密钥创建（5 步完整流程）

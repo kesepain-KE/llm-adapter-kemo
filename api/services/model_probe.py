@@ -48,14 +48,27 @@ def _builtin_wav_base64() -> str:
 
 
 def _builtin_png_bytes() -> bytes:
-    """生成一个 1x1 白色 PNG 图片的 bytes。
+    """生成一个 64x64 白色 PNG 图片的 bytes。
 
     用于 image probe 避免外部文件依赖。
+    最小 64x64 以满足大多数图片编辑 API 的要求（如 Stepfun）。
     """
-    # 最小合法 PNG：1x1 白色像素
-    return base64.b64decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-    )
+    import struct, zlib
+
+    def _make_png(w: int, h: int, r: int, g: int, b: int) -> bytes:
+        def chunk(tag: bytes, data: bytes) -> bytes:
+            c = tag + data
+            crc = struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+            return struct.pack(">I", len(data)) + c + crc
+
+        sig = b"\x89PNG\r\n\x1a\n"
+        ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+        raw = b"".join(b"\x00" + bytes([r, g, b]) * w for _ in range(h))
+        idat = chunk(b"IDAT", zlib.compress(raw))
+        iend = chunk(b"IEND", b"")
+        return sig + ihdr + idat + iend
+
+    return _make_png(64, 64, 255, 255, 255)
 
 
 BUILTIN_WAV_B64 = _builtin_wav_base64()
