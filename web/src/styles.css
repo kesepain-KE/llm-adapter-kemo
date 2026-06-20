@@ -238,7 +238,7 @@
   --radius-lg: 10px;
   --radius-md: 8px;
   --radius-sm: 6px;
-  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font: "PingFang SC", "Microsoft YaHei", 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --ease: cubic-bezier(.22,1,.36,1);
 }
@@ -246,7 +246,8 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
-  margin: 0; min-height: 100vh;
+  position: relative;
+  margin: 0; padding: 1cm 2cm; min-height: 100vh;
   color: var(--ink); font-family: var(--font);
   background: linear-gradient(180deg, #fbfcfe 0%, var(--bg) 46%, var(--bg-2) 100%);
   overflow-x: hidden;
@@ -254,7 +255,7 @@ body {
   transition: background .4s var(--ease), color .3s var(--ease);
 }
 body::before {
-  content: ""; position: fixed; inset: 0; pointer-events: none;
+  content: ""; position: absolute; inset: 0; pointer-events: none;
   background-image:
     linear-gradient(rgba(22,24,28,.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(22,24,28,.028) 1px, transparent 1px);
@@ -267,7 +268,7 @@ button { border: 0; cursor: pointer; background: transparent; }
 
 .page {
   position: relative; z-index: 1;
-  width: min(1420px, calc(100% - 32px));
+  width: 100%;
   margin: 0 auto; padding: 16px 0 36px;
 }
 
@@ -870,7 +871,7 @@ tr:last-child td { border-bottom: 0; }
   .appbar { flex-direction: column; align-items: stretch; }
 }
 @media (max-width: 720px) {
-  .page { width: min(100% - 16px,1480px); padding-top: 12px; }
+  .page { padding-top: 12px; }
   .shell { border-radius: 16px; }
   .content { padding: 12px; }
   .hero-card { padding: 18px; min-height: 0; }

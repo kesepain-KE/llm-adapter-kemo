@@ -49,6 +49,40 @@ API Key 在 `config/api_keys.json` 中管理，每个 key 可配置模型白名�
 
 ## 外部 API
 
+### GET /v1/models
+
+列出当前 API Key 有权限访问的模型列表。OpenAI 兼容格式。
+
+```bash
+curl -H "Authorization: Bearer sk-your-client-key" http://127.0.0.1:8741/v1/models
+```
+
+返回示例:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "your-provider-your-model-chat",
+      "object": "model",
+      "created": 1718000000,
+      "owned_by": "your-provider"
+    }
+  ]
+}
+```
+
+### GET /v1/models/{model_id}
+
+查看单个模型详情。
+
+```bash
+curl -H "Authorization: Bearer sk-your-client-key" http://127.0.0.1:8741/v1/models/your-provider-your-model-chat
+```
+
+返回模型 ID、所属 provider、capabilities、端点等信息。
+
 ### POST /v1/chat/completions
 
 OpenAI 兼容的对话 / 视觉入口。支持 `stream`、`tools`、`response_format`，具体能力取决于模型配置。
@@ -127,198 +161,6 @@ curl -X POST http://127.0.0.1:8741/v1/images/edits \
 | `POST /v1/videos/generations` | `video.*` |
 | `GET /v1/videos/{job_id}` | `video.*` |
 | `GET /v1/videos/{job_id}/content` | `video.*` |
-
----
-
-## 管理 API
-
-管理 API 供 Web 面板调用。默认仓库恢复后 provider 和模型均为空。
-
-### GET /api/health
-
-```bash
-curl http://127.0.0.1:8741/api/health
-```
-
-默认空配置示例:
-
-```json
-{
-  "health_score": 70,
-  "providers_online": 0,
-  "providers_total": 0,
-  "models_exposed": 0,
-  "models_visible": 0,
-  "error_rate_pct": 0.0,
-  "server_version": "0.1.0",
-  "quota_enabled": true,
-  "base_url": "127.0.0.1:8741"
-}
-```
-
-### GET /api/stats
-
-```bash
-curl "http://127.0.0.1:8741/api/stats?period=today"
-```
-
-`period` 可选: `today` / `7d` / `30d`。
-
-### GET /api/providers
-
-```bash
-curl http://127.0.0.1:8741/api/providers
-```
-
-默认返回:
-
-```json
-{
-  "providers": []
-}
-```
-
-### POST /api/providers/{name}/toggle
-
-```bash
-curl -X POST http://127.0.0.1:8741/api/providers/your-provider/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": false}'
-```
-
-### GET /api/models
-
-```bash
-curl http://127.0.0.1:8741/api/models
-```
-
-默认返回:
-
-```json
-{
-  "models": []
-}
-```
-
-模型配置示例:
-
-```json
-{
-  "your-provider-your-model-chat": {
-    "provider": "your-provider",
-    "model": "your-model-chat",
-    "capabilities": ["chat"],
-    "endpoint": "/v1/chat/completions",
-    "enabled": true,
-    "visible": true
-  }
-}
-```
-
-### POST /api/models/{model_id}/toggle
-
-```bash
-curl -X POST http://127.0.0.1:8741/api/models/your-provider-your-model-chat/toggle \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": false}'
-```
-
-### POST /api/models/{model_id}/test
-
-```bash
-curl -X POST http://127.0.0.1:8741/api/models/your-provider-your-model-chat/test
-```
-
-### GET /api/keys
-
-```bash
-curl http://127.0.0.1:8741/api/keys
-```
-
-默认返回:
-
-```json
-{
-  "keys": []
-}
-```
-
-API Key 配置示例:
-
-```json
-{
-  "keys": {
-    "sk-your-client-key": {
-      "name": "客户端密钥",
-      "enabled": true,
-      "models": ["your-provider-your-model-chat"],
-      "quota": {
-        "total_tokens": 1000000,
-        "used_tokens": 0
-      }
-    }
-  }
-}
-```
-
-### POST /api/keys/{key_id}/models
-
-```bash
-curl -X POST http://127.0.0.1:8741/api/keys/sk-your-client-key/models \
-  -H "Content-Type: application/json" \
-  -d '{"models": ["your-provider-your-model-chat"]}'
-```
-
-### GET /api/logs
-
-```bash
-curl "http://127.0.0.1:8741/api/logs?status=error&limit=20&q=your-provider"
-```
-
-参数:
-
-| 参数 | 说明 |
-|------|------|
-| `status` | `all` / `ok` / `error` |
-| `q` | 搜索关键词 |
-| `date` | 日期，默认今日 |
-| `limit` | 条数，默认 50 |
-
-### GET /api/usage
-
-```bash
-curl "http://127.0.0.1:8741/api/usage?period=today"
-```
-
-`period` 可选: `today` / `7d` / `30d`。
-
-### GET /api/config
-
-```bash
-curl http://127.0.0.1:8741/api/config
-```
-
-返回 `config.json`、`models.json`、`api_keys.json`、`global_prompt.md`、`provider.env` 的当前内容。
-
-### POST /api/config/{file}
-
-```bash
-curl -X POST http://127.0.0.1:8741/api/config/models \
-  -H "Content-Type: application/json" \
-  -d '{"content": {}}'
-```
-
-`file` 取值:
-
-| file | 写入目标 |
-|------|----------|
-| `config` | `config/config.json` |
-| `models` | `config/models.json` |
-| `api_keys` | `config/api_keys.json` |
-| `global_prompt` | `config/global_prompt.md` |
-| `provider_env` | `provider.env` |
-
-保存后会自动重载相关模块。
 
 ---
 

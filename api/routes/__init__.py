@@ -6,6 +6,7 @@ from .models import api_models, api_models_toggle, api_models_test
 from .keys import api_keys, api_keys_models
 from .logs import api_logs
 from .usage import api_usage
+from .v1_models import v1_list_models, v1_get_model
 from .config import api_config, api_config_save
 from .auth import api_auth_login, AuthMiddleware
 from .v1 import chat_completions
@@ -32,4 +33,5 @@ __all__ = [
     "embeddings",
     "rerank",
     "video_generations", "video_job_status", "video_job_content",
+    "v1_list_models", "v1_get_model",
 ]

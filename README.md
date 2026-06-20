@@ -13,8 +13,8 @@
 
 - [简介 / Introduction](#简介--introduction)
 - [快速开始 / Quick Start](#快速开始--quick-start)
-- [API 文档（AI Agent 专用） / API Docs for AI Agent](#api-文档ai-agent-专用--api-docs-for-ai-agent)
-- [更多能力 / Additional Capabilities](#更多能力--additional-capabilities)
+- [API 文档 / API Reference](#api-文档--api-reference)
+- [供应商适配 / Provider Development](#供应商适配--provider-development)
 - [配置参考 / Configuration Reference](#配置参考--configuration-reference)
 - [项目架构 / Project Architecture](#项目架构--project-architecture)
 - [相关项目 / Related Projects](#相关项目--related-projects)
@@ -25,24 +25,26 @@
 ## 简介 / Introduction
 
 **中文**  
-Kemo LLM Adapter 是一个轻量级 API 网关，将 DeepSeek、StepFun、MiniMax 等多家大模型厂商的服务统一暴露为 **OpenAI 兼容接口**。客户端只需挂载一个地址、一个 API Key，通过修改 `model` 参数即可切换后端厂商。
+Kemo LLM Adapter 是一个轻量级 API 网关，将 DeepSeek、StepFun 等多家大模型厂商的服务统一暴露为 **OpenAI 兼容接口**。客户端只需挂载一个地址、一个 API Key，通过修改 `model` 参数即可切换后端厂商。
 
 **English**  
-Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM providers (DeepSeek, StepFun, MiniMax, etc.) behind a single **OpenAI-compatible API**. Your client connects to one endpoint with one API key, and switches providers by changing the `model` parameter.
+Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM providers (DeepSeek, StepFun, etc.) behind a single **OpenAI-compatible API**. Your client connects to one endpoint with one API key, and switches providers by changing the `model` parameter.
 
 ### 特性 / Features
 
 | 中文 | English |
 |------|---------|
-| 统一 API — 全厂商 `/v1/chat/completions` 端点 | Unified API — single `/v1/chat/completions` endpoint for all providers |
-| 流式与非流式 | Streaming + non-streaming supported |
-| 插件化厂商 — 每个厂商独立目录，自动发现加载 | Pluggable providers — each provider is a self-contained directory, auto-discovered |
+| 统一 API — 全厂商统一的 OpenAI 兼容端点 | Unified API — OpenAI-compatible interface across all providers |
+| 流式与非流式 | Streaming + non-streaming |
+| 多模态扩展 — TTS / ASR / 图像 / 视频 | Multi-modal extensions — TTS, ASR, image, video |
+| 插件化厂商 — 每个厂商独立目录，自动发现加载 | Pluggable providers — self-contained directories, auto-discovered |
 | 密钥管理 — 每密钥独立模型白名单 + Token 配额 | Key management — per-key model whitelist + token quota |
 | 用量统计 — JSONL 日志，按密钥/厂商/模型汇总 | Usage tracking — JSONL logging, aggregated by key/provider/model |
 | 配置热加载 — 修改配置无需重启 | Hot-reload — config changes take effect without restart |
 | React Web 管理面板 | React Web admin panel |
 | 厂商脚手架 — 一键生成适配器样板 | Provider scaffold — one-click adapter boilerplate generation |
 | AI Agent 友好 — 支持 AI 自主完成厂商配置 | AI Agent friendly — AI can self-configure new providers |
+| Git 更新 — 自动备份保护用户配置 | Git-based updates — automated with user config protection |
 
 ---
 
@@ -101,13 +103,22 @@ python server.py
 
 服务默认运行在 `http://127.0.0.1:8741`。
 
+### 更新 / Update
+
+```bash
+python update.py            # 交互式更新
+python update.py --check    # 仅检查版本
+python update.py --yes      # 非交互式更新
+```
+
+更新脚本会自动备份 `config/` 和 `provider.env`，拉取代码后恢复，确保用户配置不丢失。
+
 ---
 
-## API 文档（AI Agent 专用） / API Docs for AI Agent
+## API 文档 / API Reference
 
-所有端点均兼容 OpenAI 格式，AI Agent 可像调用 OpenAI API 一样使用。
-
-> **注意**：`/api/*` 管理接口仅用于 Web 管理面板，AI Agent 无需关心。
+所有端点均兼容 OpenAI 格式。  
+All endpoints are OpenAI-compatible.
 
 ### 基础地址 / Base URL
 
@@ -125,24 +136,37 @@ Authorization: Bearer sk-your-key
 
 密钥由 `config/api_keys.json` 配置，支持独立模型白名单和配额控制。
 
+### 管理端点 / Admin Endpoints
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/health` | 服务健康检查 |
+| `GET` | `/api/providers` | 厂商列表与状态 |
+| `POST` | `/api/providers/{name}/toggle` | 启用/禁用厂商 |
+| `GET` | `/api/models` | 模型列表（含不可见） |
+| `POST` | `/api/models/{id}/toggle` | 启用/禁用模型 |
+| `POST` | `/api/models/{id}/test` | 模型连通性测试 |
+| `GET` | `/api/keys` | 密钥列表 |
+| `POST` | `/api/keys/{id}/models` | 更新密钥白名单 |
+| `GET` | `/api/logs` | 调用日志 |
+| `GET` | `/api/stats` | 仪表盘统计 |
+| `GET` | `/api/usage` | 用量汇总 |
+| `GET` | `/api/config` | 全局 Prompt 查看 |
+| `POST` | `/api/config/global_prompt` | 保存全局 Prompt |
+
 ### 模型列表 / List Models
 
 ```
 GET /v1/models
 ```
 
-返回所有可见的模型列表 / Returns all visible models：
-
 ```json
 {
   "object": "list",
   "data": [
-    {
-      "id": "deepseek-deepseek-v4-flash",
-      "object": "model",
-      "created": 1700000000,
-      "owned_by": "deepseek"
-    }
+    { "id": "deepseek-deepseek-v4-flash", "object": "model", "owned_by": "deepseek" },
+    { "id": "deepseek-deepseek-v4-pro",   "object": "model", "owned_by": "deepseek" },
+    { "id": "stepfun-step-3.7-flash",     "object": "model", "owned_by": "stepfun" }
   ]
 }
 ```
@@ -153,10 +177,7 @@ GET /v1/models
 POST /v1/chat/completions
 ```
 
-完全兼容 OpenAI Chat Completions API，支持流式和非流式。  
-Fully OpenAI-compatible. Supports both streaming and non-streaming.
-
-**请求示例 / Example Request：**
+完全兼容 OpenAI Chat Completions API，支持流式和非流式。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/chat/completions \
@@ -164,26 +185,24 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "deepseek-deepseek-v4-flash",
-    "messages": [
-      {"role": "user", "content": "你好"}
-    ],
+    "messages": [{"role": "user", "content": "你好"}],
     "temperature": 0.7,
     "max_tokens": 1024,
     "stream": false
   }'
 ```
 
-**参数 / Parameters：**
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
+| 参数 | 类型 | 默认 | 说明 |
+|------|------|------|------|
 | `model` | string | — | 模型 ID（见 `/v1/models`） |
-| `messages` | array | — | 消息数组（OpenAI 格式） |
+| `messages` | array | — | OpenAI 格式消息数组 |
 | `temperature` | number | 1.0 | 采样温度 |
 | `top_p` | number | 1.0 | Nucleus sampling |
 | `max_tokens` | integer | 4096 | 最大生成 token 数 |
-| `stream` | boolean | false | 是否流式返回 |
+| `stream` | boolean | false | 是否流式 |
 | `stop` | string/array | null | 停止序列 |
+| `tools` | array | null | 工具/函数调用定义 |
+| `response_format` | object | null | 如 `{"type": "json_object"}` |
 
 ### 语音合成 / Text-to-Speech
 
@@ -191,25 +210,13 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions \
 POST /v1/audio/speech
 ```
 
-生成语音音频 / Generate speech audio。
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/audio/speech \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tts-1",
-    "input": "你好，世界",
-    "voice": "alloy"
-  }'
-```
-
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `model` | string | TTS 模型 ID |
-| `input` | string | 要合成的文本（最多 4096 字符） |
-| `voice` | string | 语音风格：alloy / echo / fable / onyx / nova / shimmer |
-| `response_format` | string | 输出格式：mp3 / opus / aac / flac / wav / pcm |
+| `model` | string | 模型 ID（如 `stepfun-stepaudio-2.5-tts`） |
+| `input` | string | 要合成的文本（最多 1000 字符） |
+| `voice` | string | 音色 ID（详见 `provider/*/explain.md`） |
+| `response_format` | string | mp3 / wav / flac / opus / pcm |
+| `speed` | number | 语速 0.5～2.0 |
 
 ### 语音转文字 / Speech-to-Text
 
@@ -217,20 +224,11 @@ curl -X POST http://127.0.0.1:8741/v1/audio/speech \
 POST /v1/audio/transcriptions
 ```
 
-将音频文件转录为文字 / Transcribe audio to text。
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/audio/transcriptions \
-  -H "Authorization: Bearer sk-your-key" \
-  -F "file=@audio.mp3" \
-  -F "model=whisper-1"
-```
-
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `model` | string | 转录模型 ID |
+| `model` | string | 模型 ID（如 `stepfun-stepaudio-2.5-asr`） |
 | `file` | file | 音频文件（mp3 / wav / ogg 等） |
-| `language` | string | 语言代码（可选，如 `zh`） |
+| `language` | string | 语言代码（可选） |
 
 ### 图像生成 / Image Generation
 
@@ -238,27 +236,13 @@ curl -X POST http://127.0.0.1:8741/v1/audio/transcriptions \
 POST /v1/images/generations
 ```
 
-根据文字描述生成图片 / Generate images from text descriptions。
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/images/generations \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "dall-e-3",
-    "prompt": "一只可爱的猫",
-    "n": 1,
-    "size": "1024x1024"
-  }'
-```
-
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `model` | string | 图像模型 ID |
+| `model` | string | 模型 ID |
 | `prompt` | string | 图片描述 |
-| `n` | integer | 生成数量（1-4） |
-| `size` | string | 尺寸：1024x1024 / 1792x1024 / 1024x1792 |
-| `quality` | string | 质量：standard / hd |
+| `n` | integer | 生成数量 |
+| `size` | string | 如 `1024x1024` |
+| `response_format` | string | url / b64_json |
 
 ### 图像编辑 / Image Editing
 
@@ -266,57 +250,34 @@ curl -X POST http://127.0.0.1:8741/v1/images/generations \
 POST /v1/images/edits
 ```
 
-基于图片和蒙版进行编辑 / Edit images with a mask。
+Multipart/form-data，包含 `image` 文件 + `prompt` + `model`。
 
-### 向量嵌入 / Embeddings
+### 向量嵌入 / Embeddings / 重排序 / Rerank / 视频生成 / Video Generation
 
 ```
 POST /v1/embeddings
-```
-
-获取文本的向量表示 / Get text embeddings。
-
-```bash
-curl -X POST http://127.0.0.1:8741/v1/embeddings \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "text-embedding-3-small",
-    "input": "需要嵌入的文本"
-  }'
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `model` | string | 嵌入模型 ID |
-| `input` | string/array | 要嵌入的文本 |
-
-### 重排序 / Rerank
-
-```
 POST /v1/rerank
-```
-
-对检索结果进行重排序 / Re-rank search results。
-
-### 视频生成 / Video Generation
-
-```
 POST /v1/videos/generations
-GET /v1/videos/{job_id}
-GET /v1/videos/{job_id}/content
+GET  /v1/videos/{job_id}
+GET  /v1/videos/{job_id}/content
 ```
 
-异步视频生成，提交后通过 job_id 轮询状态。  
-Async video generation — submit, then poll with job_id。
+后端实际可用模型取决于已注册的厂商及 models.json 配置。
 
 ---
 
-## 更多能力 / Additional Capabilities
+## 供应商适配 / Provider Development
+
+### 内置厂商 / Built-in Providers
+
+| 厂商 | 模块 | 能力 |
+|------|------|------|
+| **DeepSeek** | `provider/deepseek/` | chat · token_count |
+| **StepFun** | `provider/stepfun/` | chat · token_count · audio (TTS/ASR) · image |
 
 ### 厂商脚手架 / Provider Scaffold
 
-用 Python 一键生成新厂商适配器样板 / Generate a new provider adapter with one command：
+用 Python 一键生成新厂商适配器样板：
 
 ```python
 from add_diy.scaffold import scaffold
@@ -329,50 +290,64 @@ created = scaffold(
 )
 ```
 
-生成后 / After generation：
+生成后：
 1. 编辑 `provider/minimax/chat.py` 实现参数映射和响应归一化
-2. 在 `config/models.json`、`api_keys.json`、`provider.env` 中注册
-3. 重启服务
+2. 编辑 `provider/minimax/token_count.py`（如需要）
+3. 在 `config/models.json` 中注册暴露名
+4. 在 `provider.env` 中配置 API Key
+5. 重启服务
 
 详细开发指南见 `agent_control.md`。
 
-### 管理面板 / Admin Panel
-
-访问 `http://127.0.0.1:8741/` 进入 React Web 管理面板，可在其中管理厂商、模型、密钥、查看日志和用量统计。默认凭据由 `provider.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 配置。
-
-### 配置热加载 / Hot Reload
-
-| 文件 | 作用 | 热加载 |
-|------|------|--------|
-| `config/config.json` | Provider 启停开关 | ✅ |
-| `config/models.json` | 暴露模型名 → 厂商模型映射 | ✅ |
-| `config/api_keys.json` | 客户端密钥 + 白名单 + 配额 | ✅ |
-| `config/global_prompt.md` | 全局 system prompt | ✅ |
-| `provider/*/model.json` | 厂商元信息 | ❌ 需重启 |
-| `provider.env` | 厂商 API 密钥 | ❌ 需重启 |
-
----
-
-## 配置参考 / Configuration Reference
-
-| 文件 / File | 用途 / Purpose | 热加载 |
-|-------------|----------------|--------|
-| `provider.env` | 厂商 API 密钥（从环境变量读取） | ❌ |
-| `config/config.json` | Provider 启停开关 | ✅ |
-| `config/models.json` | 暴露模型名 → 厂商模型映射 | ✅ |
-| `config/api_keys.json` | 客户端密钥 + 白名单 + 配额 | ✅ |
-| `config/global_prompt.md` | 全局 system prompt | ✅ |
-| `provider/*/model.json` | 厂商元信息（base_url, api_key_env 等） | ❌ |
-
-配置示例文件位于各文件的 `.example` 副本中。
-
-模型命名约定 / Model naming convention：
+### 模型命名约定 / Model Naming Convention
 
 ```
 {provider}-{vendor_model}
 ```
 
-示例 / Example：`deepseek-deepseek-v4-flash`
+示例：`deepseek-deepseek-v4-flash` → provider=`deepseek`, vendor_model=`deepseek-v4-flash`
+
+### 管理面板 / Admin Panel
+
+访问 `http://127.0.0.1:8741/` 进入 React Web 管理面板，可在其中管理厂商、模型、密钥、查看日志和用量统计。默认凭据由 `provider.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 配置。
+
+---
+
+## 配置参考 / Configuration Reference
+
+| 文件 | 用途 | 热加载 |
+|------|------|--------|
+| `provider.env` | 厂商 API 密钥（从环境变量读取） | ❌ 需重启 |
+| `config/config.json` | Provider 启停开关 | ✅ |
+| `config/models.json` | 暴露模型名 → 厂商模型映射 | ✅ |
+| `config/api_keys.json` | 客户端密钥 + 白名单 + 配额 | ✅ |
+| `config/global_prompt.md` | 全局 system prompt | ✅ |
+| `provider/*/model.json` | 厂商元信息（base_url, api_key_env 等） | ❌ 需重启 |
+
+配置示例文件位于各文件的 `.example` 副本中。
+
+### model.json 注册格式
+
+```json
+{
+  "deepseek-deepseek-v4-flash": {
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "capabilities": ["chat"],
+    "endpoint": "/v1/chat/completions",
+    "enabled": true,
+    "visible": true
+  },
+  "stepfun-stepaudio-2.5-tts": {
+    "provider": "stepfun",
+    "model": "stepaudio-2.5-tts",
+    "capabilities": ["audio.tts"],
+    "endpoint": "/v1/audio/speech",
+    "enabled": true,
+    "visible": true
+  }
+}
+```
 
 ---
 
@@ -394,32 +369,43 @@ llm-adapter-kemo/
 │   └── image.py             # 图像适配器（可选）
 │
 ├── core/                    # 编排层
+│   ├── __init__.py          # bootstrap() + AppContext（DI 容器）
 │   ├── registry.py          # 自动扫描加载 provider 模块
-│   ├── router.py            # 解析模型名 → provider + model
+│   ├── router.py            # 模型名 → provider + model 解析
 │   ├── auth.py              # Bearer 鉴权 + 模型白名单
 │   ├── call_log.py          # 统一调用日志（JSONL）
-│   └── usage.py             # Token 用量统计 + 配额扣减
+│   └── usage.py             # Token 用量 + 额度扣减
 │
 ├── api/                     # FastAPI 服务层
-├── add_diy/                 # 脚手架工具包
+│   ├── app.py               # 应用入口
+│   ├── routes/              # 路由处理器
+│   ├── services/            # 服务逻辑（鉴权、日志、统计）
+│   └── utils/               # 工具函数
+│
+├── add_diy/                 # 厂商脚手架工具包
 ├── web/                     # React/Vite Web 管理面板
 │   ├── src/                 # React 源码
 │   ├── package.json         # 前端依赖与构建脚本
-│   └── dist/                # 构建产物（本地生成，不提交）
+│   └── dist/                # 构建产物（本地生成）
 │
-├── server.py                # 启动入口
+├── server.py                # 服务启动入口
 ├── setup.py                 # 初始化向导
+├── update.py                # Git 更新脚本（自动备份用户配置）
+├── requirements.txt         # Python 依赖清单
+├── version.json             # 版本号
 └── agent_control.md         # AI Agent 操作手册
 ```
 
 ### 核心约定 / Core Conventions
 
-| 约定 / Convention | 说明 / Description |
-|-------------------|--------------------|
+| 约定 | 说明 |
+|------|------|
 | 模型命名 | `{provider}-{vendor_model}`，如 `deepseek-deepseek-v4-flash` |
 | Provider 隔离 | 各厂商目录完全隔离，不互相 import |
 | 请求/响应格式 | 统一为 OpenAI-compatible |
 | 密钥来源 | Provider 从环境变量读取厂商 API 密钥 |
+| 工厂优先加载 | 模块通过 `create_*` 工厂函数创建，回退到类直接初始化 |
+| 配置保护 | `update.py` 自动备份 `config/`、`provider.env`，更新后恢复 |
 
 ---
 

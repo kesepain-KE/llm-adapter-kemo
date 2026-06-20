@@ -113,6 +113,9 @@ curl http://127.0.0.1:8741/api/health
 
 # 查看可用模型
 curl -H "Authorization: Bearer sk-your-key" http://127.0.0.1:8741/v1/models
+
+# 查看单个模型详情
+curl -H "Authorization: Bearer sk-your-key" http://127.0.0.1:8741/v1/models/deepseek-deepseek-v4-flash
 ```
 
 ---

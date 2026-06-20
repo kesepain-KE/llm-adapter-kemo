@@ -24,6 +24,7 @@ from api.routes import (
     embeddings,
     rerank,
     video_generations, video_job_status, video_job_content,
+    v1_list_models, v1_get_model,
 )
 
 mimetypes.add_type("application/javascript", ".js")
@@ -50,6 +51,10 @@ app.add_api_route("/", web_panel, methods=["GET"], response_class=None)
 
 # ---- /v1/chat/completions ----
 app.add_api_route("/v1/chat/completions", chat_completions, methods=["POST"])
+
+# ---- /v1/models ----
+app.add_api_route("/v1/models", v1_list_models, methods=["GET"])
+app.add_api_route("/v1/models/{model_id}", v1_get_model, methods=["GET"])
 
 # ---- /api/auth ----
 app.add_api_route("/api/auth/login", api_auth_login, methods=["POST"])

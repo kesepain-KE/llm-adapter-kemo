@@ -187,6 +187,8 @@ class Router:
         if "capability" in entry:
             return [entry["capability"]]
         return ["chat"]
+
+    def get_extra(self, model_name: str) -> dict[str, Any]:
         """获取模型的 extra 参数（如 thinking / reasoning_effort）。"""
         if not self._loaded:
             self.load()
