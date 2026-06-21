@@ -7,6 +7,20 @@ from typing import Any
 
 from core.router import RouterError
 from api.errors import auth_to_http
+from api.services.config_store import read_text
+
+
+def _inject_global_system(body: dict) -> None:
+    """自动注入 global_prompt.md 作为 system 消息（如果尚无 system 消息）。"""
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return
+    global_prompt = read_text("config/global_prompt.md")
+    if not global_prompt.strip():
+        return
+    if any(m.get("role") == "system" for m in messages):
+        return
+    messages.insert(0, {"role": "system", "content": global_prompt.strip()})
 
 
 async def handle_chat(
@@ -56,6 +70,9 @@ async def handle_chat(
                 }
             },
         )
+
+    # 注入全局安全基座提示词（global_prompt.md）
+    _inject_global_system(body)
 
     # 注入 vendor_model + extra
     body["model"] = vendor_model
