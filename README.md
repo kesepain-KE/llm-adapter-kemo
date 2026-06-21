@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/English-%F0%9F%87%AC%F0%9F%87%A7%20README_EN.md-blue?style=for-the-badge&logo=markdown" alt="English" />
+</p>
+
+<p align="center">
+  <a href="./README_EN.md"><strong>📖 Read the English Guide →</strong></a>
+  <br>
+  <sub>Quick setup, API reference, configuration &amp; provider development in English</sub>
+</p>
+
+---
 # Kemo LLM Adapter
 
 <p align="center">
