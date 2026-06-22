@@ -311,11 +311,54 @@ async def _probe_tts_impl(audio, vendor_model: str, capability: str) -> dict:
     except Exception as exc:
         return {
             "ok": False, "capability": capability, "endpoint": api_path,
+async def _probe_image_gen(ctx, provider: str, vendor_model: str, capability: str, extra: dict) -> dict:
+    """Image generation probe: 发送简单文生图请求。
+
+    只发 1 张，response_format=url 避免大包。
+    """
+    try:
+        image = ctx.registry.get_module(provider, "image")
+    except ModuleNotFoundError:
+        return {
+            "ok": False, "capability": capability, "endpoint": None,
+            "message": f"provider '{provider}' image not loaded",
+            "error": f"provider '{provider}' image not loaded",
+        }
+
+    api_path = "/v1/images/generations"
+    request = {
+        "model": vendor_model,
+        "prompt": "a simple red circle on white background",
+        "n": 1,
+        "size": "1024x1024",
+        "response_format": "url",
+    }
+    t0 = time.perf_counter()
+    try:
+        result = await image.generate(request)
+        latency = (time.perf_counter() - t0) * 1000
+        has_data = (
+            isinstance(result, dict)
+            and result.get("data")
+            and len(result["data"]) > 0
+        )
+        return {
+            "ok": has_data,
+            "capability": capability,
+            "endpoint": api_path,
+            "latency_ms": round(latency, 1),
+            "message": "ok" if has_data else "empty response",
+            "error": None if has_data else "empty response",
+            "content": f"image generation returned {len(result.get('data', []))} item(s)" if has_data else "",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "capability": capability,
+            "endpoint": api_path,
             "message": f"{type(exc).__name__}: {exc}",
             "error": f"{type(exc).__name__}: {exc}",
         }
-
-
 async def _probe_asr(ctx_or_adapter, provider=None, vendor_model=None, capability=None, extra=None) -> dict:
     """ASR probe: 内置极短 WAV 测试。兼容两种调用方式。"""
     if isinstance(provider, str) and vendor_model is not None:
