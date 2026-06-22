@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 
 from fastapi import Request, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response, JSONResponse
 
 from api.deps import get_ctx
 from api.errors import capability_error
+from api.services.v1_logging import log_v1_error, log_v1_success
 from core.router import RouterError
 
 
@@ -55,10 +57,34 @@ async def audio_speech(request: Request):
     vendor_model = route["model"]
     body["model"] = vendor_model
 
+    started_at = time.perf_counter()
     try:
         result = await audio.speech(body)
     except Exception as exc:
+        log_v1_error(
+            ctx,
+            token=token,
+            key_info=key_info,
+            provider=route["provider"],
+            model=vendor_model,
+            capability="audio.tts",
+            request=body,
+            started_at=started_at,
+            error=exc,
+        )
         raise HTTPException(502, detail=str(exc))
+
+    log_v1_success(
+        ctx,
+        token=token,
+        key_info=key_info,
+        provider=route["provider"],
+        model=vendor_model,
+        capability="audio.tts",
+        request=body,
+        response={},
+        started_at=started_at,
+    )
 
     # 推断 Content-Type
     fmt = body.get("response_format", "mp3")
@@ -107,12 +133,19 @@ async def audio_transcriptions(
     except ModuleNotFoundError:
         raise HTTPException(503, detail=f"audio adapter not loaded for {route['provider']}")
 
+    log_request = {
+        "model": route["model"],
+        "language": language,
+        "file": file.filename or "",
+    }
+
     # 保存上传文件到临时路径
     suffix = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
+    started_at = time.perf_counter()
     try:
         result = await audio.transcribe(
             audio_path=tmp_path,
@@ -120,10 +153,33 @@ async def audio_transcriptions(
             language=language,
         )
     except Exception as exc:
+        log_v1_error(
+            ctx,
+            token=token,
+            key_info=key_info,
+            provider=route["provider"],
+            model=route["model"],
+            capability="audio.asr",
+            request=log_request,
+            started_at=started_at,
+            error=exc,
+        )
         raise HTTPException(502, detail=str(exc))
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+    log_v1_success(
+        ctx,
+        token=token,
+        key_info=key_info,
+        provider=route["provider"],
+        model=route["model"],
+        capability="audio.asr",
+        request=log_request,
+        response=result,
+        started_at=started_at,
+    )
 
     return JSONResponse(content=result)
 

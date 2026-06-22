@@ -27,13 +27,25 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 CALL_LOG_DIR = "data_status/call_log"
+
+
+def _load_timezone() -> ZoneInfo:
+    try:
+        return ZoneInfo(os.environ.get("KEMO_TIMEZONE", "Asia/Shanghai"))
+    except Exception:
+        return ZoneInfo("Asia/Shanghai")
+
+
+APP_TIMEZONE = _load_timezone()
 
 
 class CallLogger:
@@ -83,7 +95,7 @@ class CallLogger:
         dict
             写入的 log entry，可继续传递。
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(APP_TIMEZONE)
 
         entry: dict[str, Any] = {
             "timestamp": now.isoformat(),
@@ -302,7 +314,7 @@ class CallLogger:
 
     def _today_file(self, key_id: str, date: str | None = None) -> Path:
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = datetime.now(APP_TIMEZONE).strftime("%Y-%m-%d")
         return self._base_dir / key_id / f"{date}.jsonl"
 
     # ------------------------------------------------------------------

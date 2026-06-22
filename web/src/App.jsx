@@ -933,18 +933,31 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [auth.isAuthenticated, logStatus, logSearch, loadLogs]);
 
-  // 高频轮询：仪表盘数据 + 日志（每 10 秒自动刷新）
+  // 高频轮询：仪表盘数据、日志、用量与余额（每 10 秒自动刷新）
   useEffect(() => {
     if (!auth.isAuthenticated) return;
     const poll = () => {
       loadHealth();
       loadStats(statsPeriod);
       loadLogs(logStatus, logSearch.trim());
+      loadUsage(usagePeriod);
+      loadKeys();
     };
     poll();
     const id = setInterval(poll, 10_000);
     return () => clearInterval(id);
-  }, [auth.isAuthenticated, statsPeriod, logStatus, logSearch, loadHealth, loadStats, loadLogs]);
+  }, [
+    auth.isAuthenticated,
+    statsPeriod,
+    usagePeriod,
+    logStatus,
+    logSearch,
+    loadHealth,
+    loadStats,
+    loadLogs,
+    loadUsage,
+    loadKeys,
+  ]);
 
   // 低频轮询：Provider 注册表 + 模型路由表（每 30 秒）
   useEffect(() => {

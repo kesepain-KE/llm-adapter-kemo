@@ -21,14 +21,16 @@
 **④ 读取厂商文档，编写适配模块**
 → 按需实现 `chat.py`、`token_count.py`、`audio.py`、`image.py` 等。
 → 注册至 `provider/<厂商名>/` 目录，完成 `model.json` 和 `__init__.py`。
+→ 聊天适配器必须保证非流式响应带 `usage`，流式最后一个 chunk 尽量带 `usage`；`token_count.py` 必须兼容厂商原始 usage 与适配器扁平化后的 usage。
 
 **⑤ 批量测试能力**
 → 对每个已注册模型分层测试（chat / vision / audio / image / embedding），在 models.json 中标上正确的能力标签。
+→ 测试后检查 `/api/logs`、`/api/stats`、`/api/usage` 是否记录请求数、错误、Token；流式聊天必须能入库并扣减配额。
 
 **⑥ 完成收尾**
 → 告知用户注册成功，并提供新模型的暴露名、能力概览、调用方式。
 → **如需特殊说明**（如音色映射、厂商限制、尺寸规格、价格、参数差异等），在 `provider/<厂商名>/explain.md` 中记录，便于后续查阅。
-→ **确保新厂商的模型完全适配本项目的模型注册与使用机制**：命名规则 `{provider}-{vendor_model}`、热加载、OpenAI 兼容响应格式、API Key 鉴权与白名单。若厂商接口与本项目规范有差异，通过适配层（adapter）抹平，不绕过统一框架。
+→ **确保新厂商的模型完全适配本项目的模型注册与使用机制**：命名规则 `{provider}-{vendor_model}`、热加载、OpenAI 兼容响应格式、API Key 鉴权与白名单、统一调用日志、Token usage 归一化与配额扣减。若厂商接口与本项目规范有差异，通过适配层（adapter）抹平，不绕过统一框架。
 
 > 本文件是**入口索引**，指引 AI Agent 找到具体的操作流程文件。
 >
@@ -49,10 +51,9 @@
 
 ```
 llm-adapter-kemo/
-├── add_diy/                 ← 🎯 操作指引 + 工具
+├── add_diy/                 ← 🎯 操作指引文档
 │   ├── build_adapter.md     ← 新厂商接入（7 步完整流程）
-│   ├── build_key.md         ← 密钥创建（5 步完整流程）
-│   └── api_test.py          ← 连通测试工具（空壳，待实现）
+│   └── build_key.md         ← 密钥创建（5 步完整流程）
 │
 ├── config/                  ← 全局配置（热加载）
 │   ├── config.json          ← provider 启停开关
@@ -93,6 +94,9 @@ llm-adapter-kemo/
 - 模型命名：`{provider}-{vendor_model}`（如 `deepseek-deepseek-v4-flash`）
 - 响应格式：统一 OpenAI-compatible
 - 密钥来源：厂商密钥从环境变量读，客户端密钥从 `api_keys.json` 读
+- 用量统计：所有 `/v1/*` 调用写入 `data_status/call_log/`；聊天模型优先使用厂商返回的真实 `usage`，无 usage 时只做 prompt 估算
+- 流式统计：`invoke_stream()` 应强制请求厂商返回流式 usage，最后一个含 usage 的 chunk 会被服务层入库并触发配额扣减
+- 日期口径：统计按应用时区切日，默认 `Asia/Shanghai`，可通过 `KEMO_TIMEZONE` 覆盖
 
 **热加载规则：**
 | 文件 | 需重启 |

@@ -59,6 +59,7 @@ Your App / AI Agent
 | **Admin Panel** | React Web UI at `http://127.0.0.1:8741/` for managing keys, models, logs |
 | **Hot-reload** | Config changes in `config/` take effect without restarting the server |
 | **Key Management** | Per-key model whitelist + token quota |
+| **Usage Tracking** | JSONL call logs aggregated by key, provider, model, and capability |
 
 ## API Endpoints
 
@@ -81,6 +82,8 @@ Authorization: Bearer sk-your-key
 ```
 POST /v1/chat/completions
 ```
+
+Chat completions support both non-streaming and streaming. For streaming calls, the gateway asks the upstream provider to include usage when possible, then records usage and deducts quota after the stream finishes.
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/chat/completions \
@@ -175,6 +178,8 @@ Available models depend on registered providers and `models.json` configuration.
 
 Example configs are available in `.example` copies of each file.
 
+Usage dates are grouped by the application timezone. The default is `Asia/Shanghai`; set `KEMO_TIMEZONE` in the environment or `provider.env` to override it.
+
 ### Model Registration Example
 
 ```json
@@ -199,22 +204,13 @@ Example configs are available in `.example` copies of each file.
 | **DeepSeek** | `provider/deepseek/` | chat · token_count |
 | **StepFun** | `provider/stepfun/` | chat · token_count · audio (TTS/ASR) · image |
 
-### Scaffold a New Provider
+### Provider Onboarding
 
-```python
-from add_diy.scaffold import scaffold
+`add_diy/` currently provides Agent workflow documents, not an importable Python scaffold generator. To add a provider, read `agent_control.md`, then follow `add_diy/build_adapter.md` to manually create `provider/<name>/` and the adapter files.
 
-created = scaffold(
-    "minimax",
-    base_url="https://api.minimax.com",
-    vendor_model="abab-v6.5",
-    modules=["chat", "token_count", "audio", "image"],
-)
-```
-
-After generation:
+After creation:
 1. Edit `provider/minimax/chat.py` for parameter mapping and response normalization
-2. Edit `provider/minimax/token_count.py` (if needed)
+2. Edit `provider/minimax/token_count.py` so real usage, streaming usage, cache tokens, and reasoning tokens normalize correctly
 3. Register in `config/models.json`
 4. Configure API key in `provider.env`
 5. Restart the service
@@ -258,7 +254,7 @@ llm-adapter-kemo/
 │   ├── services/            # Business logic
 │   └── utils/               # Utilities
 │
-├── add_diy/                 # Provider scaffold toolkit
+├── add_diy/                 # Provider onboarding and key creation workflow docs
 ├── web/                     # React/Vite admin panel
 ├── server.py                # Service entry point
 ├── setup.py                 # Setup wizard

@@ -46,14 +46,14 @@ Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM provider
 | 中文 | English |
 |------|---------|
 | 统一 API — 全厂商统一的 OpenAI 兼容端点 | Unified API — OpenAI-compatible interface across all providers |
-| 流式与非流式 | Streaming + non-streaming |
+| 流式与非流式 — 流式完成后记录 usage 并扣减配额 | Streaming + non-streaming, with usage accounting after streams finish |
 | 多模态扩展 — TTS / ASR / 图像 / 视频 | Multi-modal extensions — TTS, ASR, image, video |
 | 插件化厂商 — 每个厂商独立目录，自动发现加载 | Pluggable providers — self-contained directories, auto-discovered |
 | 密钥管理 — 每密钥独立模型白名单 + Token 配额 | Key management — per-key model whitelist + token quota |
-| 用量统计 — JSONL 日志，按密钥/厂商/模型汇总 | Usage tracking — JSONL logging, aggregated by key/provider/model |
+| 用量统计 — JSONL 日志，按密钥/厂商/模型/能力汇总 | Usage tracking — JSONL logging, aggregated by key/provider/model/capability |
 | 配置热加载 — 修改配置无需重启 | Hot-reload — config changes take effect without restart |
 | React Web 管理面板 | React Web admin panel |
-| 厂商脚手架 — 一键生成适配器样板 | Provider scaffold — one-click adapter boilerplate generation |
+| 厂商接入指南 — Agent 可按流程创建适配器 | Provider onboarding guide — agents can create adapters by following the workflow |
 | AI Agent 友好 — 支持 AI 自主完成厂商配置 | AI Agent friendly — AI can self-configure new providers |
 | Git 更新 — 自动备份保护用户配置 | Git-based updates — automated with user config protection |
 
@@ -188,7 +188,7 @@ GET /v1/models
 POST /v1/chat/completions
 ```
 
-完全兼容 OpenAI Chat Completions API，支持流式和非流式。
+完全兼容 OpenAI Chat Completions API，支持流式和非流式。流式请求会尽量强制上游返回 `usage`，服务层在流结束后写入调用日志并扣减配额。
 
 ```bash
 curl -X POST http://127.0.0.1:8741/v1/chat/completions \
@@ -286,24 +286,13 @@ GET  /v1/videos/{job_id}/content
 | **DeepSeek** | `provider/deepseek/` | chat · token_count |
 | **StepFun** | `provider/stepfun/` | chat · token_count · audio (TTS/ASR) · image |
 
-### 厂商脚手架 / Provider Scaffold
+### 厂商接入指南 / Provider Onboarding
 
-用 Python 一键生成新厂商适配器样板：
+`add_diy/` 当前提供 Agent 操作流程文档，不提供可导入的 Python 自动生成器。接入新厂商时先阅读 `agent_control.md`，再按 `add_diy/build_adapter.md` 手动创建 `provider/<name>/` 目录和适配文件。
 
-```python
-from add_diy.scaffold import scaffold
-
-created = scaffold(
-    "minimax",
-    base_url="https://api.minimax.com",
-    vendor_model="abab-v6.5",
-    modules=["chat", "token_count", "audio", "image"],
-)
-```
-
-生成后：
+创建后：
 1. 编辑 `provider/minimax/chat.py` 实现参数映射和响应归一化
-2. 编辑 `provider/minimax/token_count.py`（如需要）
+2. 编辑 `provider/minimax/token_count.py`，确保真实 usage、流式 usage、缓存 token、推理 token 都能归一化
 3. 在 `config/models.json` 中注册暴露名
 4. 在 `provider.env` 中配置 API Key
 5. 重启服务
@@ -336,6 +325,8 @@ created = scaffold(
 | `provider/*/model.json` | 厂商元信息（base_url, api_key_env 等） | ❌ 需重启 |
 
 配置示例文件位于各文件的 `.example` 副本中。
+
+统计日期按应用时区切分，默认 `Asia/Shanghai`；如需改为其他时区，可在环境变量或 `provider.env` 中设置 `KEMO_TIMEZONE`。
 
 ### model.json 注册格式
 
@@ -393,7 +384,7 @@ llm-adapter-kemo/
 │   ├── services/            # 服务逻辑（鉴权、日志、统计）
 │   └── utils/               # 工具函数
 │
-├── add_diy/                 # 厂商脚手架工具包
+├── add_diy/                 # 厂商接入与密钥创建流程文档
 ├── web/                     # React/Vite Web 管理面板
 │   ├── src/                 # React 源码
 │   ├── package.json         # 前端依赖与构建脚本

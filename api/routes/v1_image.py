@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import time
 
 from fastapi import Request, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from api.deps import get_ctx
 from api.errors import capability_error
+from api.services.v1_logging import log_v1_error, log_v1_success
 from core.router import RouterError
 
 
@@ -60,10 +62,34 @@ async def image_generations(request: Request):
             detail="image generation not implemented for this provider",
         )
 
+    started_at = time.perf_counter()
     try:
         result = await image.generate(body)
     except Exception as exc:
+        log_v1_error(
+            ctx,
+            token=token,
+            key_info=key_info,
+            provider=route["provider"],
+            model=vendor_model,
+            capability="image.generation",
+            request=body,
+            started_at=started_at,
+            error=exc,
+        )
         raise HTTPException(502, detail=str(exc))
+
+    log_v1_success(
+        ctx,
+        token=token,
+        key_info=key_info,
+        provider=route["provider"],
+        model=vendor_model,
+        capability="image.generation",
+        request=body,
+        response=result,
+        started_at=started_at,
+    )
 
     return JSONResponse(content=result)
 
@@ -117,10 +143,34 @@ async def image_edits(
         "response_format": response_format,
     }
 
+    started_at = time.perf_counter()
     try:
         result = await image.edit(edit_request)
     except Exception as exc:
+        log_v1_error(
+            ctx,
+            token=token,
+            key_info=key_info,
+            provider=route["provider"],
+            model=route["model"],
+            capability="image.edit",
+            request=edit_request,
+            started_at=started_at,
+            error=exc,
+        )
         raise HTTPException(502, detail=str(exc))
+
+    log_v1_success(
+        ctx,
+        token=token,
+        key_info=key_info,
+        provider=route["provider"],
+        model=route["model"],
+        capability="image.edit",
+        request=edit_request,
+        response=result,
+        started_at=started_at,
+    )
 
     return JSONResponse(content=result)
 

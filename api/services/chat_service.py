@@ -126,14 +126,34 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
     """SSE 流式 generator。"""
     import json as _json
     first = True
+    final_usage = None
+    response_stub: dict[str, Any] = {"id": "", "model": vendor_model, "choices": []}
     try:
         async for chunk in chat.invoke_stream(body):
+            if isinstance(chunk, dict):
+                if chunk.get("id"):
+                    response_stub["id"] = chunk["id"]
+                if chunk.get("model"):
+                    response_stub["model"] = chunk["model"]
+                if chunk.get("choices"):
+                    response_stub["choices"] = chunk["choices"]
+                if chunk.get("usage"):
+                    final_usage = chunk["usage"]
             data = _json.dumps(chunk, ensure_ascii=False)
             if first:
                 yield f"data: {data}\n\n"
                 first = False
             else:
                 yield f"data: {data}\n\n"
+
+        latency_ms = (time.perf_counter() - t0_start) * 1000
+        response_for_usage = {"usage": final_usage} if final_usage else {}
+        usage = ctx.usage.count(provider, response_for_usage, request=body)
+        ctx.call_log.log(
+            key_id=token, key_name=key_info.get("name", token[:12]),
+            provider=provider, model=vendor_model, capability=capability,
+            request=body, response=response_stub, usage=usage, latency_ms=latency_ms,
+        )
         yield "data: [DONE]\n\n"
     except Exception as exc:
         latency_ms = (time.perf_counter() - t0_start) * 1000

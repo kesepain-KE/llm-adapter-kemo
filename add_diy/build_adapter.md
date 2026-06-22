@@ -37,6 +37,7 @@
 | 模型列表 | `GET /v1/models` 端点或文档 | 如 `mimo-v4-flash`, `mimo-v4-pro` |
 | 聊天端点 | API 文档 | 通常 `POST /chat/completions` |
 | 流式格式 | API 文档 | SSE 标准 / 变种 |
+| 流式 usage | API 文档 / 实测 | 是否支持 `stream_options.include_usage=true` 或等价参数 |
 | 认证方式 | API 文档 | Bearer token / API Key Header |
 | 是否 OpenAI-compatible | 自行判断 | 是→chat.py 基本不用改；否→需映射 |
 | 其他能力 | API 文档 | STT? TTS? 文生图? 嵌入? 重排? |
@@ -136,6 +137,7 @@ curl -H "Authorization: Bearer %PROVIDER_API_KEY%" "%PROVIDER_BASE_URL%/models"
   → 每个 data: 行是否标准 JSON？
   → 末尾是否是 data: [DONE]？
   → 是否支持 stream_options: {include_usage: true}？
+  → 如果不支持，是否有其他接口可获取真实 usage？否则只能走 prompt 估算，需在 explain.md 说明
 
 □ 认证方式
   → Bearer token / API-Key Header / 其他？
@@ -378,9 +380,11 @@ thinking                thinking ({"type": "enabled"})
 
 **⚠️ 关键规则：**
 - 非流式响应**必须**有 `usage` 字段
-- 流式最后一个 chunk **必须**有 `usage` 字段（通过 `stream_options: {include_usage: true}` 实现）
+- 流式请求必须在 `_build_request_body()` 或 `invoke_stream()` 中强制打开 usage，例如合并为 `{"include_usage": true}`；不能让客户端传 `false` 覆盖
+- 流式最后一个 chunk **应**有 `usage` 字段（通过 `stream_options: {include_usage: true}` 实现）。如果厂商确实不支持，服务层会用 `token_count.count(request)` 做低精度 prompt 估算，completion/cache/reasoning 不准
 - `choices[].delta` 第 1 个 chunk 的 role 应为 `"assistant"`
 - 末尾 chunk 的 finish_reason 应为 `"stop"`，delta content 可为空
+- `invoke_stream()` 不负责写日志；服务层会捕获最后一个带 `usage` 的 chunk 入库并扣配额
 
 ### 4.2 token_count.py 适配器（必须）
 
@@ -416,12 +420,25 @@ class {Name}TokenCount:
         result["prompt_tokens"] = usage.get("prompt_tokens", 0)
         result["completion_tokens"] = usage.get("completion_tokens", 0)
         result["total_tokens"] = usage.get("total_tokens", 0)
-        result["prompt_cache_hit_tokens"] = usage.get("prompt_cache_hit_tokens", 0)
-        result["prompt_cache_miss_tokens"] = usage.get("prompt_cache_miss_tokens", 0)
-        # 处理 completion_tokens_details.reasoning_tokens
-        details = usage.get("completion_tokens_details", {})
-        if isinstance(details, dict):
-            result["reasoning_tokens"] = details.get("reasoning_tokens", 0)
+
+        # 兼容两类格式：
+        # 1) 厂商原始嵌套字段，如 prompt_tokens_details.cached_tokens
+        # 2) chat.py 已经扁平化后的 prompt_cache_hit_tokens / reasoning_tokens
+        cached = usage.get("prompt_cache_hit_tokens", usage.get("cached_tokens", 0))
+        prompt_details = usage.get("prompt_tokens_details", {})
+        if isinstance(prompt_details, dict):
+            cached = prompt_details.get("cached_tokens", cached)
+        result["prompt_cache_hit_tokens"] = cached
+        result["prompt_cache_miss_tokens"] = usage.get(
+            "prompt_cache_miss_tokens",
+            max(0, result["prompt_tokens"] - cached),
+        )
+
+        reasoning = usage.get("reasoning_tokens", usage.get("thinking_tokens", 0))
+        completion_details = usage.get("completion_tokens_details", {})
+        if isinstance(completion_details, dict):
+            reasoning = completion_details.get("reasoning_tokens", reasoning)
+        result["reasoning_tokens"] = reasoning
         return result
 
     @staticmethod
@@ -443,6 +460,7 @@ class {Name}TokenCount:
 **两种需要修改的情况：**
 1. **厂商 usage 字段名不一致** → 修改 `normalize_usage()` 的字段映射
 2. **厂商有公开 tokenizer** → 修改 `estimate_tokens()` 使用该编码
+3. **厂商把缓存/推理 token 放在嵌套 details 中** → 同时兼容嵌套字段和扁平字段，避免二次归一化时归零
 
 | 统一字段 | 常见别名 |
 |----------|----------|
@@ -450,6 +468,8 @@ class {Name}TokenCount:
 | `completion_tokens` | `output_tokens`, `completion_length` |
 | `total_tokens` | `total`, `sum` |
 | `reasoning_tokens` | `thinking_tokens`, `reason_tokens` |
+| `prompt_cache_hit_tokens` | `cached_tokens`, `prompt_tokens_details.cached_tokens` |
+| `prompt_cache_miss_tokens` | `uncached_tokens`, `prompt_tokens - cached_tokens` |
 
 ### 4.3 audio.py — TTS + ASR 骨架（按需）
 
@@ -783,7 +803,7 @@ curl http://127.0.0.1:8741/api/providers
 | Capability | 测试方法 | 成功标签 | 失败标签 |
 |-----------|----------|----------|----------|
 | `chat` (非流式) | `POST /v1/chat/completions` `stream:false` | `✅ chat` | `❌ chat` |
-| `chat` (流式) | `POST /v1/chat/completions` `stream:true` | `✅ stream` | `❌ stream` |
+| `chat` (流式) | `POST /v1/chat/completions` `stream:true`，并检查 `/api/logs` 中 usage 入库 | `✅ stream` | `❌ stream` |
 | `vision.image` | 多模态消息含 `image_url` | `✅ vision` | `❌ vision` |
 | `audio.tts` | `POST /v1/audio/speech` | `✅ tts` | `❌ tts` |
 | `audio.asr` | `POST /v1/audio/transcriptions` | `✅ asr` | `❌ asr` |
@@ -807,6 +827,10 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions ^
   -H "Authorization: Bearer sk-your-key" ^
   -H "Content-Type: application/json" ^
   -d "{\"model\":\"{name}-{vendor_model}\",\"messages\":[{\"role\":\"user\",\"content\":\"数到3\"}],\"stream\":true}"
+
+# 验证统计入库（确认上面的非流式/流式请求都有 total_tokens）
+curl -H "Authorization: Bearer <admin-session-token>" ^
+  "http://127.0.0.1:8741/api/logs?limit=10"
 
 # TTS
 curl -X POST http://127.0.0.1:8741/v1/audio/speech ^
