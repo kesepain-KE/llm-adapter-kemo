@@ -86,14 +86,26 @@ function TestPill({ test }) {
   if (test.status === 'pending') {
     return <span className="test-pill pending">测试中...</span>;
   }
-  if (test.status === 'success') {
-    const label = [`正常 ${fmtMs(test.latencyMs)}`, test.testedAt ? ` · ${test.testedAt}` : ''].filter(Boolean).join('');
-    return <span className="test-pill success" title={test.content || ''}>{label}</span>;
-  }
-  if (test.status === 'error') {
-    return <span className="test-pill error" title={test.message || ''}>失败</span>;
-  }
-  return null;
+  const tone = test.status === 'error' ? 'error' : 'success';
+  const available = test.available ?? test.status === 'success';
+  const responseLatency = test.responseLatencyMs ?? test.latencyMs;
+  const title = [
+    test.testedAt || '',
+    test.message || '',
+    test.content || '',
+  ].filter(Boolean).join('\n');
+  return (
+    <span className={`test-pill ${tone}`} title={title}>
+      <span className="test-pill-field">
+        <span className="test-pill-label">可用性</span>
+        <b className="test-pill-value">{available ? '可用' : '不可用'}</b>
+      </span>
+      <span className="test-pill-field">
+        <span className="test-pill-label">响应延迟</span>
+        <b className="test-pill-value">{fmtMs(responseLatency)}</b>
+      </span>
+    </span>
+  );
 }
 
 function EmptyRow({ colSpan, children = '暂无数据' }) {
@@ -503,17 +515,19 @@ function Models({ models, modelTests, onToggleModel, onTestModel }) {
                       {model.enabled ? '开' : '关'}
                     </button>
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ minHeight: 30, padding: '0 12px', fontSize: 11.5 }}
-                      onClick={() => onTestModel(model.id)}
-                      disabled={modelTests[model.id]?.status === 'pending'}
-                    >
-                      {modelTests[model.id]?.status === 'pending' ? '...' : '测试'}
-                    </button>{' '}
-                    <TestPill test={modelTests[model.id]} />
+                  <td>
+                    <div className="model-test-cell">
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ minHeight: 30, padding: '0 12px', fontSize: 11.5 }}
+                        onClick={() => onTestModel(model.id)}
+                        disabled={modelTests[model.id]?.status === 'pending'}
+                      >
+                        {modelTests[model.id]?.status === 'pending' ? '...' : '测试'}
+                      </button>
+                      <TestPill test={modelTests[model.id]} />
+                    </div>
                   </td>
                 </tr>
               )) : <EmptyRow colSpan={6} children="暂无模型" />}
@@ -791,7 +805,7 @@ export default function App() {
   const [usagePeriod, setUsagePeriod] = useState('today');
   const [logStatus, setLogStatus] = useState('all');
   const [logSearch, setLogSearch] = useState('');
-  const [modelTests, setModelTests] = useState({});  // { [modelId]: { status, latencyMs, message, content, testedAt, requestId } }
+  const [modelTests, setModelTests] = useState({});  // { [modelId]: { status, available, latencyMs, responseLatencyMs, message, content, testedAt, requestId } }
   const toastTimer = useRef(null);
 
   const notify = useCallback((message) => {
@@ -1017,11 +1031,28 @@ export default function App() {
       setModelTests((current) => {
         if (current[id]?.requestId !== requestId) return current;
         const testedAt = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const responseLatencyMs = result.response_latency_ms ?? result.latency_ms ?? null;
+        const available = result.availability ?? result.ok ?? false;
         return {
           ...current,
           [id]: result.ok
-            ? { status: 'success', latencyMs: result.latency_ms, content: result.content || '', testedAt }
-            : { status: 'error', message: result.error || 'fail', testedAt },
+            ? {
+                status: 'success',
+                available,
+                latencyMs: responseLatencyMs,
+                responseLatencyMs,
+                content: result.content || '',
+                testedAt,
+              }
+            : {
+                status: 'error',
+                available,
+                latencyMs: responseLatencyMs,
+                responseLatencyMs,
+                message: result.error || result.message || 'fail',
+                content: result.content || '',
+                testedAt,
+              },
         };
       });
     } catch (error) {
@@ -1030,7 +1061,14 @@ export default function App() {
         const testedAt = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         return {
           ...current,
-          [id]: { status: 'error', message: error.message, testedAt },
+          [id]: {
+            status: 'error',
+            available: false,
+            latencyMs: null,
+            responseLatencyMs: null,
+            message: error.message,
+            testedAt,
+          },
         };
       });
     }

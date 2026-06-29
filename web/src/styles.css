@@ -571,15 +571,64 @@ tr:last-child td { border-bottom: 0; }
 .badge.blue::before { background: var(--blue); }
 
 /* ---- 模型测试状态 pill ---- */
+.model-test-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .test-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-left: 6px; padding: 0 8px; height: 22px;
-  font-size: 11px; line-height: 22px; white-space: nowrap;
-  border-radius: 999px; user-select: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  user-select: none;
+}
+.test-pill.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  padding: 0 8px;
+  height: 22px;
+  font-size: 11px;
+  line-height: 22px;
+  white-space: nowrap;
+  border-radius: 999px;
 }
 .test-pill.pending { background: rgba(23,23,23,.06); color: var(--muted); }
 .test-pill.success { background: rgba(49,191,131,.12); color: var(--green); }
 .test-pill.error { background: rgba(223,95,131,.10); color: var(--pink); cursor: help; }
+.test-pill-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.test-pill-label {
+  color: rgba(68, 73, 82, .74);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.test-pill-value {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.test-pill.success .test-pill-value { color: var(--green); }
+.test-pill.error .test-pill-value { color: var(--pink); }
 
 .provider-list, .log-list, .health-list { display: grid; gap: 8px; }
 .provider-card, .log-item, .health-item {
@@ -887,6 +936,7 @@ tr:last-child td { border-bottom: 0; }
   .calls-table th:nth-child(3), .calls-table td:nth-child(3) { width: 64px; }
   .calls-table th:nth-child(5), .calls-table td:nth-child(5) { width: 68px; }
   .calls-table .badge { max-width: 62px; }
+  .test-pill { grid-template-columns: 1fr; }
   .trend-panel { padding: 16px 14px; }
   .trend-stat-row { grid-template-columns: 1fr; }
   .trend-stat-row div { min-height: 50px; }
