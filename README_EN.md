@@ -26,13 +26,15 @@ python server.py         # Start the gateway on http://127.0.0.1:8741
 
 - Python >= 3.10
 - pip
-- Node.js >= 20 & npm (only needed for admin panel)
+- Node.js >= 20 & npm (needed for web panel builds and update.py)
 
 ### Building the Admin Panel (Optional)
 
 ```bash
 cd web && npm install && npm run build && cd ..
 ```
+
+`python update.py` will also run this step after an update.
 
 ## How It Works
 
@@ -266,7 +268,7 @@ llm-adapter-kemo/
 ├── web/                     # React/Vite admin panel
 ├── server.py                # Service entry point
 ├── setup.py                 # Setup wizard
-├── update.py                # Git update script (auto-backup)
+├── update.py                # Git update script (auto-backup, frontend rebuild)
 ├── requirements.txt         # Python dependencies
 ├── version.json             # Version number
 └── agent_control.md         # AI Agent operation manual
@@ -280,7 +282,7 @@ python update.py --check    # Check version only
 python update.py --yes      # Non-interactive update
 ```
 
-The update script automatically backs up `config/` and `provider.env`, pulls the latest code, then restores your configuration.
+The update script automatically backs up `config/` and `provider.env`, pulls the latest code, restores your configuration, and when needed installs Python dependencies and rebuilds the web panel.
 
 ## Related Projects
 

@@ -35,6 +35,10 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent
 VERSION_FILE = PROJECT_ROOT / "version.json"
 UPDATE_LOG = PROJECT_ROOT / "tmp" / "update.log"
+WEB_DIR = PROJECT_ROOT / "web"
+WEB_PACKAGE_JSON = WEB_DIR / "package.json"
+WEB_PACKAGE_LOCK = WEB_DIR / "package-lock.json"
+WEB_DIST_INDEX = WEB_DIR / "dist" / "index.html"
 
 # 整目录保护 — 不被更新覆盖
 PROTECTED_DIRS: list[Path] = [
@@ -183,7 +187,7 @@ def git_has_local_changes() -> bool:
 
 
 def git_stash_push() -> bool:
-    r = _git("stash", "push", "-m", f"auto-stash before update {datetime.now().isoformat()}")
+    r = _git("stash", "push", "-u", "-m", f"auto-stash before update {datetime.now().isoformat()}")
     return r.returncode == 0
 
 
@@ -280,6 +284,49 @@ def apply_templates() -> None:
                 log.warning("模板创建失败 %s: %s", dst.name, e)
 
 
+def _run_streaming_command(args: list[str], cwd: Path, title: str) -> bool:
+    try:
+        result = subprocess.run(args, cwd=cwd)
+    except FileNotFoundError:
+        log.error("%s 失败：找不到命令 %s", title, args[0])
+        return False
+
+    if result.returncode != 0:
+        log.error("%s 失败，退出码 %s", title, result.returncode)
+        return False
+    return True
+
+
+def install_python_deps() -> bool:
+    req = PROJECT_ROOT / "requirements.txt"
+    if not req.is_file():
+        log.error("requirements.txt 不存在，无法安装 Python 依赖")
+        return False
+    return _run_streaming_command(
+        [sys.executable, "setup.py", "--install"],
+        PROJECT_ROOT,
+        "安装 Python 依赖",
+    )
+
+
+def build_frontend() -> bool:
+    if not WEB_PACKAGE_JSON.is_file():
+        log.error("web/package.json 不存在，无法构建前端")
+        return False
+
+    npm_install = ["npm", "ci"] if WEB_PACKAGE_LOCK.is_file() else ["npm", "install"]
+    if not _run_streaming_command(npm_install, WEB_DIR, "安装前端依赖"):
+        return False
+
+    if not _run_streaming_command(["npm", "run", "build"], WEB_DIR, "构建前端"):
+        return False
+
+    if not WEB_DIST_INDEX.is_file():
+        log.error("前端构建完成，但未生成 %s", WEB_DIST_INDEX.relative_to(PROJECT_ROOT))
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # 更新后检查
 # ---------------------------------------------------------------------------
@@ -318,7 +365,8 @@ def print_report(
     remote_ver: str | None,
     updated: bool,
     missing_deps: list[str],
-    reqs_changed: bool,
+    deps_refreshed: bool,
+    frontend_built: bool,
 ) -> None:
     print()
     print("=" * 56)
@@ -328,45 +376,36 @@ def print_report(
     print(f"  远程版本 : {remote_ver or 'unknown'}")
 
     if updated:
-        print(f"  更新状态 : ✅ 已完成")
+        print("  更新状态 : 已完成")
     else:
-        print(f"  更新状态 : ⏭ 未执行")
+        print("  更新状态 : 未执行")
 
     if missing_deps:
-        print(f"  缺依赖   : ⚠️  {' '.join(missing_deps)}")
-        print(f"             运行: python setup.py --install")
-    elif reqs_changed:
-        print(f"  依赖     : ℹ️  requirements.txt 有变化")
-        print(f"             建议: python setup.py --install")
+        print(f"  缺依赖   : {' '.join(missing_deps)}")
+        print("             运行: python setup.py --install")
+    elif deps_refreshed:
+        print("  依赖     : 已自动补齐")
     else:
-        print(f"  依赖     : ✅ 齐全")
+        print("  依赖     : 齐全")
 
     print()
     if updated:
-        print(f"  python server.py  启动服务")
+        print(f"  前端     : {'已重建' if frontend_built else '未执行'}")
+        print("  python server.py  启动服务")
     print()
 
-
-# ---------------------------------------------------------------------------
-# 主要流程
-# ---------------------------------------------------------------------------
-
 def run(check_only: bool = False, auto_yes: bool = False) -> int:
-    """执行更新流程。
-
-    返回 0 = 已是最新 / 完成更新，1 = 有错误。
-    """
+    """执行更新流程。"""
     _setup_logging()
     local_ver = read_local_version()
 
     print()
     print("=" * 56)
-    print(f"  Kemo LLM Adapter — 更新工具")
+    print("  Kemo LLM Adapter - 更新工具")
     print(f"  本地版本: {local_ver or 'unknown'}")
     print("=" * 56)
     print()
 
-    # ── 前提检查 ──
     if not is_git_repo():
         log.error("当前目录不是 Git 仓库，无法使用 Git 更新")
         log.error("请从 https://github.com/kesepain-KE/llm-adapter-kemo 克隆")
@@ -376,7 +415,6 @@ def run(check_only: bool = False, auto_yes: bool = False) -> int:
     if remote_url:
         log.info("远程: %s (%s/%s)", remote_url, GIT_REMOTE, GIT_BRANCH)
 
-    # ── 获取远程信息 ──
     log.info("检查远程版本...")
     if not git_fetch():
         log.error("无法连接远程仓库，请检查网络")
@@ -385,57 +423,68 @@ def run(check_only: bool = False, auto_yes: bool = False) -> int:
     remote_ver = git_remote_version()
     log.info("远程版本: %s", remote_ver or "unknown")
 
-    # ── 版本对比 ──
     if not git_has_updates():
-        log.info("已是最新版本 ✅")
-        print_report(local_ver, remote_ver, updated=False, missing_deps=[], reqs_changed=False)
+        log.info("已经是最新版本")
+        print_report(
+            local_ver,
+            remote_ver,
+            updated=False,
+            missing_deps=[],
+            deps_refreshed=False,
+            frontend_built=False,
+        )
         return 0
 
-    # ── 变更摘要 ──
     changed = git_list_changed_files()
     commits = git_log_summary()
 
     print()
-    print(f"  📦 发现更新: {remote_ver or '?'}")
+    print(f"  发现更新: {remote_ver or '?'}")
     print()
     if commits:
-        print(f"  Commit 摘要:")
+        print("  Commit 摘要:")
         for line in commits[:10]:
             print(f"    {line}")
         if len(commits) > 10:
-            print(f"    ... 还有 {len(commits) - 10} 个")
+            print(f"    ... 还有 {len(commits) - 10} 条")
     print()
 
-    # 过滤受保护路径，列出实际会变的文件
     log.info("变更文件 (%d 个):", len(changed))
     visible_changed = 0
+    protected_dirs = {p.relative_to(PROJECT_ROOT) for p in PROTECTED_DIRS}
+    protected_files = {pf.relative_to(PROJECT_ROOT) for pf in PROTECTED_FILES}
     for line in changed:
         parts = line.split("\t")
         if len(parts) < 2:
             continue
         status, path = parts[0], parts[1]
-        # 跳过受保护目录内的文件
         p = Path(path)
-        if any(p.is_relative_to(pd.relative_to(PROJECT_ROOT)) for pd in PROTECTED_DIRS):
+        if any(p.is_relative_to(pd) for pd in protected_dirs):
             continue
-        if path in {str(pf.relative_to(PROJECT_ROOT)) for pf in PROTECTED_FILES}:
+        if p in protected_files:
             continue
         log.info("  %s  %s", status, path)
         visible_changed += 1
 
     if visible_changed == 0 and not git_has_local_changes():
         log.info("变更全部在受保护路径内，无实际更新内容")
-        print_report(local_ver, remote_ver, updated=False, missing_deps=[], reqs_changed=False)
+        print_report(
+            local_ver,
+            remote_ver,
+            updated=False,
+            missing_deps=[],
+            deps_refreshed=False,
+            frontend_built=False,
+        )
         return 0
 
-    # ── 确认 ──
     if check_only:
         log.info("--check 模式，不执行更新")
         return 0
 
     if not auto_yes:
         try:
-            ans = input("\n  确认更新？[Y/n]: ").strip().lower()
+            ans = input("\n  确认更新 [Y/n]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             log.info("用户取消")
@@ -444,60 +493,74 @@ def run(check_only: bool = False, auto_yes: bool = False) -> int:
             log.info("用户取消")
             return 0
 
-    # ── 执行更新 ──
     print()
     log.info("开始更新...")
 
-    # 1. 备份
-    log.info("[1/5] 备份受保护文件...")
-    backup_protected()
+    log.info("[1/7] 备份受保护文件...")
+    if not backup_protected():
+        log.error("备份受保护文件失败，已中止更新")
+        return 1
 
-    # 2. 暂存本地修改（如果有）
     had_local = git_has_local_changes()
     if had_local:
         log.info("    暂存本地修改...")
-        git_stash_push()
+        if not git_stash_push():
+            log.error("暂存本地修改失败，已中止更新")
+            return 1
 
-    # 3. Pull
-    log.info("[2/5] 拉取更新...")
+    log.info("[2/7] 拉取更新...")
     if not git_pull():
         log.error("拉取失败，请手动处理")
         return 1
 
-    # 4. 恢复受保护文件
-    log.info("[3/5] 恢复受保护文件...")
-    restore_protected()
+    log.info("[3/7] 恢复受保护文件...")
+    if not restore_protected():
+        log.error("恢复受保护文件失败，已中止更新")
+        return 1
 
-    # 5. 检查模板
-    log.info("[4/5] 处理模板文件...")
+    log.info("[4/7] 处理模板文件...")
     apply_templates()
 
-    # 6. 恢复本地 stash
     if had_local:
         log.info("    恢复本地修改...")
-        git_stash_pop()
+        if not git_stash_pop():
+            log.error("恢复本地修改失败，请检查 git stash")
+            return 1
 
-    # 7. 版本
-    remote_ver_final = read_local_version() or remote_ver or local_ver or "?"
-    write_local_version(remote_ver_final)
-    log.info("[5/5] 版本: %s", remote_ver_final)
-
-    # ── 收尾 ──
     missing = check_deps()
     reqs_changed = check_requirements_changed()
+    deps_refreshed = False
 
-    if missing:
-        log.warning("缺依赖: %s", " ".join(missing))
+    if missing or reqs_changed:
+        log.info("[5/7] 补齐 Python 依赖...")
+        if not install_python_deps():
+            return 1
+        deps_refreshed = True
+        missing = check_deps()
+        if missing:
+            log.error("Python 依赖安装后仍缺失: %s", " ".join(missing))
+            return 1
+    else:
+        log.info("[5/7] Python 依赖已是最新")
 
-    print_report(local_ver, remote_ver_final, updated=True, missing_deps=missing, reqs_changed=reqs_changed)
-    log.info("更新完成 ✅")
+    log.info("[6/7] 强制构建 Web 面板...")
+    if not build_frontend():
+        return 1
+
+    remote_ver_final = read_local_version() or remote_ver or local_ver or "?"
+    write_local_version(remote_ver_final)
+    log.info("[7/7] 版本: %s", remote_ver_final)
+
+    print_report(
+        local_ver,
+        remote_ver_final,
+        updated=True,
+        missing_deps=missing,
+        deps_refreshed=deps_refreshed,
+        frontend_built=True,
+    )
+    log.info("更新完成")
     return 0
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
 def main() -> int:
     import argparse
 

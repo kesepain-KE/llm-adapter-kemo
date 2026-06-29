@@ -65,7 +65,7 @@ Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM provider
 
 - Python >= 3.10
 - pip
-- Node.js >= 20 & npm（仅 Web 面板需要 / only needed for admin panel）
+- Node.js >= 20 & npm（Web 面板构建和 update.py 更新时需要 / required for web panel builds and update.py）
 
 ### 获取项目 / Get the Project
 
@@ -106,6 +106,8 @@ python setup.py
 cd web && npm install && npm run build && cd ..
 ```
 
+更新后 `python update.py` 也会自动执行这一步。
+
 ### 启动 / Start
 
 ```bash
@@ -122,7 +124,7 @@ python update.py --check    # 仅检查版本
 python update.py --yes      # 非交互式更新
 ```
 
-更新脚本会自动备份 `config/` 和 `provider.env`，拉取代码后恢复，确保用户配置不丢失。
+更新脚本会自动备份 `config/` 和 `provider.env`，拉取代码后恢复，并在需要时补齐 Python 依赖、强制重建 Web 面板，确保用户配置不丢失。
 
 ---
 
@@ -392,7 +394,7 @@ llm-adapter-kemo/
 │
 ├── server.py                # 服务启动入口
 ├── setup.py                 # 初始化向导
-├── update.py                # Git 更新脚本（自动备份用户配置）
+├── update.py                # Git 更新脚本（自动备份配置并重建前端）
 ├── requirements.txt         # Python 依赖清单
 ├── version.json             # 版本号
 └── agent_control.md         # AI Agent 操作手册
