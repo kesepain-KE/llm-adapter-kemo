@@ -156,7 +156,7 @@ Authorization: Bearer sk-your-key
 | `POST` | `/api/providers/{name}/toggle` | 启用/禁用厂商 |
 | `GET` | `/api/models` | 模型列表（含不可见） |
 | `POST` | `/api/models/{id}/toggle` | 启用/禁用模型 |
-| `POST` | `/api/models/{id}/test` | 模型连通性测试 |
+| `POST` | `/api/models/{id}/test` | 模型连通性测试（可用性 + 响应延迟） |
 | `GET` | `/api/keys` | 密钥列表 |
 | `POST` | `/api/keys/{id}/models` | 更新密钥白名单 |
 | `GET` | `/api/logs` | 调用日志 |

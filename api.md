@@ -47,6 +47,16 @@ API Key 在 `config/api_keys.json` 中管理，每个 key 可配置模型白名�
 
 ---
 
+## 管理端点 / Admin Endpoints
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/models/{id}/test` | 模型连通性测试（可用性 + 响应延迟） |
+
+模型测试结果在管理面板里只展示 `可用性` 和 `响应延迟`，对应接口返回里的 `ok` 和 `response_latency_ms`。
+
+---
+
 ## 外部 API
 
 ### GET /v1/models

@@ -77,6 +77,14 @@ http://<your-host>:8741
 Authorization: Bearer sk-your-key
 ```
 
+### Admin Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/models/{id}/test` | Model connectivity test (availability + response latency) |
+
+In the admin panel, the model test result shows only `availability` and `response latency`, mapped from `ok` and `response_latency_ms`.
+
 ### Chat Completions
 
 ```
