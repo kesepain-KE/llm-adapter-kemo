@@ -34,6 +34,7 @@ def log_v1_success(
         response=response if isinstance(response, dict) else {},
         usage=usage,
         latency_ms=latency_ms,
+        completion_latency_ms=latency_ms,
     )
 
 
@@ -61,4 +62,5 @@ def log_v1_error(
         response={},
         error=f"{type(error).__name__}: {error}",
         latency_ms=latency_ms,
+        completion_latency_ms=latency_ms,
     )

@@ -87,6 +87,7 @@ class CallLogger:
         usage: dict[str, Any] | None = None,
         error: str | None = None,
         latency_ms: float = 0.0,
+        completion_latency_ms: float | None = None,
     ) -> dict[str, Any]:
         """记录一次 API 调用。
 
@@ -110,6 +111,9 @@ class CallLogger:
             "error": error,
             "usage": usage or {},
         }
+
+        if completion_latency_ms is not None:
+            entry["completion_latency_ms"] = round(completion_latency_ms, 2)
 
         # 消息摘要（不记原文）
         entry["messages_summary"] = self._summarize_messages(

@@ -214,7 +214,7 @@ async def _probe_chat(ctx, provider: str, vendor_model: str, capability: str, ex
     t0 = time.perf_counter()
     try:
         resp = await chat.invoke(body)
-        latency = (time.perf_counter() - t0) * 1000
+        response_latency_ms = (time.perf_counter() - t0) * 1000
         content = (
             resp.get("choices", [{}])[0].get("message", {}).get("content", "")
             or str(resp.get("choices", [{}])[0])[:200]
@@ -223,16 +223,20 @@ async def _probe_chat(ctx, provider: str, vendor_model: str, capability: str, ex
             "ok": True,
             "capability": capability,
             "endpoint": api_path,
-            "latency_ms": round(latency, 1),
+            "latency_ms": round(response_latency_ms, 1),
+            "response_latency_ms": round(response_latency_ms, 1),
             "message": "ok",
             "error": None,
             "content": content[:200],
         }
     except Exception as exc:
+        response_latency_ms = (time.perf_counter() - t0) * 1000
         return {
             "ok": False,
             "capability": capability,
             "endpoint": api_path,
+            "latency_ms": round(response_latency_ms, 1),
+            "response_latency_ms": round(response_latency_ms, 1),
             "message": f"{type(exc).__name__}: {exc}",
             "error": f"{type(exc).__name__}: {exc}",
         }
@@ -311,6 +315,11 @@ async def _probe_tts_impl(audio, vendor_model: str, capability: str) -> dict:
     except Exception as exc:
         return {
             "ok": False, "capability": capability, "endpoint": api_path,
+            "message": f"{type(exc).__name__}: {exc}",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
 async def _probe_image_gen(ctx, provider: str, vendor_model: str, capability: str, extra: dict) -> dict:
     """Image generation probe: 发送简单文生图请求。
 

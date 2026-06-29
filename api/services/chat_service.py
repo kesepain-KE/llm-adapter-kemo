@@ -108,6 +108,7 @@ async def handle_chat(
             provider=provider, model=vendor_model, capability=capability,
             request=body, response={},
             error=f"{type(exc).__name__}: {exc}", latency_ms=latency_ms,
+            completion_latency_ms=latency_ms,
         )
         raise HTTPException(502, detail=str(exc)) from exc
 
@@ -117,6 +118,7 @@ async def handle_chat(
         key_id=token, key_name=key_info.get("name", token[:12]),
         provider=provider, model=vendor_model, capability=capability,
         request=body, response=response, usage=usage, latency_ms=latency_ms,
+        completion_latency_ms=latency_ms,
     )
     return response
 
@@ -126,11 +128,14 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
     """SSE 流式 generator。"""
     import json as _json
     first = True
+    response_latency_ms = None
     final_usage = None
     response_stub: dict[str, Any] = {"id": "", "model": vendor_model, "choices": []}
     try:
         async for chunk in chat.invoke_stream(body):
             if isinstance(chunk, dict):
+                if response_latency_ms is None:
+                    response_latency_ms = (time.perf_counter() - t0_start) * 1000
                 if chunk.get("id"):
                     response_stub["id"] = chunk["id"]
                 if chunk.get("model"):
@@ -146,22 +151,30 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             else:
                 yield f"data: {data}\n\n"
 
-        latency_ms = (time.perf_counter() - t0_start) * 1000
+        completion_latency_ms = (time.perf_counter() - t0_start) * 1000
+        if response_latency_ms is None:
+            response_latency_ms = completion_latency_ms
         response_for_usage = {"usage": final_usage} if final_usage else {}
         usage = ctx.usage.count(provider, response_for_usage, request=body)
         ctx.call_log.log(
             key_id=token, key_name=key_info.get("name", token[:12]),
             provider=provider, model=vendor_model, capability=capability,
-            request=body, response=response_stub, usage=usage, latency_ms=latency_ms,
+            request=body, response=response_stub, usage=usage,
+            latency_ms=response_latency_ms,
+            completion_latency_ms=completion_latency_ms,
         )
         yield "data: [DONE]\n\n"
     except Exception as exc:
-        latency_ms = (time.perf_counter() - t0_start) * 1000
+        completion_latency_ms = (time.perf_counter() - t0_start) * 1000
+        if response_latency_ms is None:
+            response_latency_ms = completion_latency_ms
         ctx.call_log.log(
             key_id=token, key_name=key_info.get("name", token[:12]),
             provider=provider, model=vendor_model, capability=capability,
-            request=body, response={},
-            error=f"{type(exc).__name__}: {exc}", latency_ms=latency_ms,
+            request=body, response=response_stub,
+            error=f"{type(exc).__name__}: {exc}",
+            latency_ms=response_latency_ms,
+            completion_latency_ms=completion_latency_ms,
         )
         err = _json.dumps({"error": str(exc)}, ensure_ascii=False)
         yield f"data: {err}\n\n"
