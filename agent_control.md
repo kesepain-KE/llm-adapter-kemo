@@ -86,7 +86,6 @@ llm-adapter-kemo/
 ├── provider.env             ← 厂商 API 密钥（不提交到 Git）
 ├── server.py                ← 启动入口
 ├── setup.py                 ← 初始化向导 / 环境检查
-├── start.ps1                ← Windows 启动脚本
 └── requirements.txt         ← Python 依赖
 ```
 
