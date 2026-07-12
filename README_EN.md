@@ -219,8 +219,8 @@ Usage dates are grouped by the application timezone. The default is `Asia/Shangh
 `add_diy/` currently provides Agent workflow documents, not an importable Python scaffold generator. To add a provider, read `agent_control.md`, then follow `add_diy/build_adapter.md` to manually create `provider/<name>/` and the adapter files.
 
 After creation:
-1. Edit `provider/minimax/chat.py` for parameter mapping and response normalization
-2. Edit `provider/minimax/token_count.py` so real usage, streaming usage, cache tokens, and reasoning tokens normalize correctly
+1. Edit `provider/{name}/chat.py` for parameter mapping and response normalization
+2. Edit `provider/{name}/token_count.py` so real usage, streaming usage, cache tokens, and reasoning tokens normalize correctly
 3. Register in `config/models.json`
 4. Configure API key in `provider.env`
 5. Restart the service
