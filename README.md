@@ -293,8 +293,8 @@ GET  /v1/videos/{job_id}/content
 `add_diy/` 当前提供 Agent 操作流程文档，不提供可导入的 Python 自动生成器。接入新厂商时先阅读 `agent_control.md`，再按 `add_diy/build_adapter.md` 手动创建 `provider/<name>/` 目录和适配文件。
 
 创建后：
-1. 编辑 `provider/minimax/chat.py` 实现参数映射和响应归一化
-2. 编辑 `provider/minimax/token_count.py`，确保真实 usage、流式 usage、缓存 token、推理 token 都能归一化
+1. 编辑 `provider/{name}/chat.py` 实现参数映射和响应归一化
+2. 编辑 `provider/{name}/token_count.py`，确保真实 usage、流式 usage、缓存 token、推理 token 都能归一化
 3. 在 `config/models.json` 中注册暴露名
 4. 在 `provider.env` 中配置 API Key
 5. 重启服务
