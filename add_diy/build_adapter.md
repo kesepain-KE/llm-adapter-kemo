@@ -302,6 +302,15 @@ def create_token_count(config: dict | None = None) -> {Name}TokenCount:
 
 ```python
 class {Name}Chat:
+    def __init__(self, config: dict | None = None):
+        cfg = config or {}
+        self._base_url = cfg.get("base_url", "").rstrip("/")
+        env_key = cfg.get("api_key_env", "{NAME_UPPER}_API_KEY")
+        self._api_key = os.environ.get(env_key, "")
+        # ⚠️ 超时按实际需要调整。非流式大 payload 请求（如子代理计划生成）
+        # 可能超过 120s，建议设为 600.0 以避免 ReadTimeout
+        self._client = httpx.AsyncClient(timeout=600.0)
+
     async def invoke(self, request: dict) -> dict:
         """非流式。request/response 格式均为 OpenAI-compatible。"""
         ...
