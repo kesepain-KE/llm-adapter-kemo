@@ -125,9 +125,12 @@ async def handle_chat(
 
 async def _stream_generator(chat, body, ctx, token, key_info, provider,
                             vendor_model, capability, t0_start):
-    """SSE 流式 generator。"""
+    """SSE 流式 generator。
+
+    ``[DONE]`` 只表示上游完整结束。异常路径发送结构化 ``error`` 事件后
+    直接关闭流，避免客户端把失败误判成成功结束。
+    """
     import json as _json
-    first = True
     response_latency_ms = None
     final_usage = None
     response_stub: dict[str, Any] = {"id": "", "model": vendor_model, "choices": []}
@@ -145,11 +148,7 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
                 if chunk.get("usage"):
                     final_usage = chunk["usage"]
             data = _json.dumps(chunk, ensure_ascii=False)
-            if first:
-                yield f"data: {data}\n\n"
-                first = False
-            else:
-                yield f"data: {data}\n\n"
+            yield f"data: {data}\n\n"
 
         completion_latency_ms = (time.perf_counter() - t0_start) * 1000
         if response_latency_ms is None:
@@ -176,6 +175,12 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             latency_ms=response_latency_ms,
             completion_latency_ms=completion_latency_ms,
         )
-        err = _json.dumps({"error": str(exc)}, ensure_ascii=False)
+        error_payload = {
+            "error": {
+                "message": str(exc),
+                "type": "upstream_stream_error",
+                "code": "stream_interrupted",
+            }
+        }
+        err = _json.dumps(error_payload, ensure_ascii=False)
         yield f"data: {err}\n\n"
-        yield "data: [DONE]\n\n"
