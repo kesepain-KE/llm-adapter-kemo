@@ -28,5 +28,12 @@ async def chat_completions(request: Request):
         raise HTTPException(502, detail=str(exc)) from exc
 
     if stream:
-        return StreamingResponse(result, media_type="text/event-stream")
+        return StreamingResponse(
+            result,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",
+            },
+        )
     return JSONResponse(content=result)
