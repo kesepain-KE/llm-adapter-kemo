@@ -9,12 +9,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from api.routes.v1 import chat_completions
 from api.services.chat_service import _stream_generator
+from core.concurrency import ConcurrencyManager, ConcurrencySettings
 from provider.deepseek.chat import DeepSeekChat
 
 
@@ -60,6 +63,21 @@ class _NeverChat:
         await asyncio.Event().wait()
         if False:  # pragma: no cover - makes this an async generator
             yield {}
+
+
+class _ConnectFlakyChat:
+    def __init__(self, fail_after_chunk: bool = False):
+        self.attempts = 0
+        self.fail_after_chunk = fail_after_chunk
+
+    async def invoke_stream(self, body):
+        self.attempts += 1
+        if self.fail_after_chunk:
+            yield {"id": "x", "choices": [{"delta": {"content": "partial"}}]}
+            raise httpx.ConnectError("connect reset after output")
+        if self.attempts == 1:
+            raise httpx.ConnectError("temporary connect failure")
+        yield {"id": "x", "choices": [{"delta": {"content": "recovered"}}]}
 
 
 class _FakeResponse:
@@ -109,7 +127,7 @@ class StreamResponseHeaderTests(unittest.IsolatedAsyncioTestCase):
 
 
 class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
-    async def _run(self, chat):
+    async def _run(self, chat, lease=None):
         ctx = _Ctx()
         result = []
         async for item in _stream_generator(
@@ -122,27 +140,36 @@ class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
             "vendor-model",
             "chat",
             0.0,
+            lease=lease,
         ):
             result.append(item)
         return _decode_sse(result), ctx
 
     async def test_normal_chunks_end_with_exactly_one_done(self):
+        manager = ConcurrencyManager(ConcurrencySettings(1, 1, 1.0))
+        lease = await manager.acquire("deepseek")
         chunks = [
             {"id": "x", "choices": [{"delta": {"content": "a"}}]},
             {"id": "x", "choices": [{"delta": {"content": "b"}}]},
             {"id": "x", "choices": [], "usage": {"completion_tokens": 2}},
         ]
-        events, ctx = await self._run(_FakeChat(chunks))
+        events, ctx = await self._run(_FakeChat(chunks), lease=lease)
         self.assertEqual(events[:-1], chunks)
         self.assertEqual(events.count("[DONE]"), 1)
         self.assertNotIn("error", ctx.call_log.entries[-1])
+        self.assertEqual(manager.snapshot()["active"], 0)
 
     async def test_disconnect_before_first_event_is_error_without_done(self):
-        events, ctx = await self._run(_FakeChat(error=ConnectionError("before first event")))
+        manager = ConcurrencyManager(ConcurrencySettings(1, 1, 1.0))
+        lease = await manager.acquire("deepseek")
+        events, ctx = await self._run(
+            _FakeChat(error=ConnectionError("before first event")), lease=lease
+        )
         self.assertEqual(len(events), 1)
         self.assertIn("error", events[0])
         self.assertNotIn("[DONE]", events)
         self.assertIn("error", ctx.call_log.entries[-1])
+        self.assertEqual(manager.snapshot()["active"], 0)
 
     async def test_disconnect_after_text_is_error_without_done(self):
         first = {"id": "x", "choices": [{"delta": {"content": "partial"}}]}
@@ -194,6 +221,8 @@ class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_downstream_cancellation_is_logged_and_propagated(self):
         ctx = _Ctx()
+        manager = ConcurrencyManager(ConcurrencySettings(1, 1, 1.0))
+        lease = await manager.acquire("deepseek")
         stream = _stream_generator(
             _NeverChat(),
             {"model": "vendor-model", "messages": []},
@@ -204,6 +233,7 @@ class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
             "vendor-model",
             "chat",
             0.0,
+            lease=lease,
         )
         pending = asyncio.create_task(anext(stream))
         await asyncio.sleep(0)
@@ -214,6 +244,32 @@ class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(ctx.call_log.entries), 1)
         self.assertIn("downstream client disconnected", ctx.call_log.entries[0]["error"])
+        self.assertEqual(manager.snapshot()["active"], 0)
+
+    async def test_connect_error_before_first_chunk_is_retried(self):
+        chat = _ConnectFlakyChat()
+        with patch("api.services.chat_service.CONNECT_RETRIES", 2), patch(
+            "api.services.chat_service._connect_retry_delay", return_value=0
+        ):
+            events, ctx = await self._run(chat)
+
+        self.assertEqual(chat.attempts, 2)
+        self.assertEqual(events[0]["choices"][0]["delta"]["content"], "recovered")
+        self.assertEqual(events[-1], "[DONE]")
+        self.assertEqual(ctx.call_log.entries[-1]["attempt_count"], 2)
+
+    async def test_connect_error_after_first_chunk_is_not_retried(self):
+        chat = _ConnectFlakyChat(fail_after_chunk=True)
+        with patch("api.services.chat_service.CONNECT_RETRIES", 2), patch(
+            "api.services.chat_service._connect_retry_delay", return_value=0
+        ):
+            events, ctx = await self._run(chat)
+
+        self.assertEqual(chat.attempts, 1)
+        self.assertEqual(events[0]["choices"][0]["delta"]["content"], "partial")
+        self.assertIn("error", events[-1])
+        self.assertNotIn("[DONE]", events)
+        self.assertEqual(ctx.call_log.entries[-1]["attempt_count"], 1)
 
 
 class DeepSeekSSEParserTests(unittest.IsolatedAsyncioTestCase):
