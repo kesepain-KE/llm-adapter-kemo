@@ -20,6 +20,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -55,22 +56,32 @@ class AuthManager:
         self._root = Path(project_root)
         self._keys: dict[str, dict[str, Any]] = {}
         self._loaded = False
+        self._file_signature: tuple[int, int] | None = None
+        self._quota_reader: Callable[[str, int], int] | None = None
 
     # ------------------------------------------------------------------
     # 加载
     # ------------------------------------------------------------------
 
-    def load(self) -> None:
+    def load(self, force: bool = False) -> None:
         """加载 api_keys.json。"""
         path = self._root / "config" / "api_keys.json"
         try:
+            stat = path.stat()
+            signature = (stat.st_mtime_ns, stat.st_size)
+            if self._loaded and not force and signature == self._file_signature:
+                return
             data = json.loads(path.read_text(encoding="utf-8"))
             self._keys = data.get("keys", {})
             self._loaded = True
+            self._file_signature = signature
             logger.info("loaded %d API keys", len(self._keys))
         except (json.JSONDecodeError, OSError) as exc:
             logger.error("failed to load api_keys.json: %s", exc)
             raise AuthError(f"api_keys.json load error: {exc}") from exc
+
+    def bind_quota_reader(self, reader: Callable[[str, int], int]) -> None:
+        self._quota_reader = reader
 
     # ------------------------------------------------------------------
     # 鉴权
@@ -120,13 +131,19 @@ class AuthManager:
         quota = key_info.get("quota", {})
         if quota:
             total = quota.get("total_tokens", 0)
-            used = quota.get("used_tokens", 0)
+            configured_used = quota.get("used_tokens", 0)
+            used = (
+                self._quota_reader(token, configured_used)
+                if self._quota_reader is not None
+                else configured_used
+            )
             if total > 0 and used >= total:
                 raise QuotaExceededError(
                     f"quota exceeded for key "
                     f"'{key_info.get('name', token[:12])}' "
                     f"({used:,}/{total:,} tokens)"
                 )
+            quota = {**quota, "used_tokens": used}
 
         return {
             "id": token,
@@ -152,12 +169,20 @@ class AuthManager:
             self.load()
         result: list[dict[str, Any]] = []
         for token, info in self._keys.items():
+            quota = info.get("quota", {})
+            if quota and self._quota_reader is not None:
+                quota = {
+                    **quota,
+                    "used_tokens": self._quota_reader(
+                        token, quota.get("used_tokens", 0)
+                    ),
+                }
             result.append({
                 "id": token,
                 "name": info.get("name", ""),
                 "enabled": info.get("enabled", True),
                 "model_count": len(info.get("models", [])),
-                "quota": info.get("quota", {}),
+                "quota": quota,
             })
         return result
 
