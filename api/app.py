@@ -1,12 +1,13 @@
 """FastAPI 应用工厂。"""
 
+from contextlib import asynccontextmanager
 import mimetypes
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.deps import PROJECT_ROOT
+from api.deps import PROJECT_ROOT, close_ctx
 from api.routes import (
     web_panel,
     api_health,
@@ -31,11 +32,21 @@ mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("application/javascript", ".mjs")
 mimetypes.add_type("text/css", ".css")
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        await close_ctx()
+
+
 app = FastAPI(
     title="Kemo LLM Adapter",
     version="0.1.0",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 # ---- 鉴权中间件 (必须在路由注册之前) ----
