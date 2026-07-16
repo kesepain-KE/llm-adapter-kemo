@@ -98,6 +98,7 @@ llm-adapter-kemo/
 - 用量统计：所有 `/v1/*` 调用写入 `data_status/call_log/`；聊天模型优先使用厂商返回的真实 `usage`，无 usage 时只做 prompt 估算
 - 流式统计：`invoke_stream()` 应强制请求厂商返回流式 usage，最后一个含 usage 的 chunk 会被服务层入库并触发配额扣减
 - 并发准入：聊天请求受全局和单 Provider 两级限制；连接错误只允许在上游尚未返回任何 chunk 时重试
+- Provider 边界：`provider/*` 是外部注册扩展，核心不依赖厂商内部实现；Registry 热加载复用已有模块实例，应用退出时按可选能力调用 `aclose()` 或 `close()`，未实现清理接口的 Provider 也必须可以正常运行
 - 配额存储：密钥、白名单和总额度保留在 `config/api_keys.json`；动态 `used_tokens` 以 `data_status/quota.sqlite3` 为权威存储
 - 多 worker：并发闸门仍为进程内状态，日志与配置仍为文件存储，完成共享状态改造前不得直接启用多 Uvicorn worker
 - 日期口径：统计按应用时区切日，默认 `Asia/Shanghai`，可通过 `KEMO_TIMEZONE` 覆盖
