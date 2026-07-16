@@ -2,8 +2,8 @@
 Token 用量 + 额度管理模块。
 
 - count()         — 从 API 响应提取归一化 usage
-- check_quota()   — 请求前：检查 api_keys.json 额度是否够
-- deduct_quota()  — 请求后：扣减 api_keys.json used_tokens
+- check_quota()   — 请求前：结合 api_keys.json 总额度检查 SQLite 实时用量
+- deduct_quota()  — 请求后：原子增加 SQLite used_tokens
 - get_usage()     — 从 call_log 读取汇总
 """
 
@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from typing import Any
+
+from .quota_store import QuotaStore
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class UsageManager:
         self._root = Path(project_root)
         self._registry = registry
         self._call_log: Any = None
+        self._quota_store = QuotaStore(self._root)
 
     def bind_call_log(self, call_log: Any) -> None:
         """绑定统一日志实例（供 bootstrap 调用）。"""
@@ -99,7 +100,9 @@ class UsageManager:
         key_info = keys[token]
         quota = key_info.get("quota", {})
         total = quota.get("total_tokens", 0)
-        used = quota.get("used_tokens", 0)
+        used = self._quota_store.get_used(
+            token, fallback=quota.get("used_tokens", 0)
+        )
 
         if total > 0 and used >= total:
             raise QuotaExceededError(
@@ -132,7 +135,6 @@ class UsageManager:
         if total_tokens <= 0:
             return None
 
-        path = self._root / "config" / "api_keys.json"
         keys = self._load_keys()
 
         if token not in keys:
@@ -143,20 +145,16 @@ class UsageManager:
         if not quota:
             return None
 
-        used = quota.get("used_tokens", 0) + total_tokens
-        quota["used_tokens"] = used
-
-        # 原子写回
-        data = {"keys": keys}
         try:
-            tmp_path = path.with_suffix(".tmp")
-            tmp_path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            used = self._quota_store.deduct(
+                token,
+                total_tokens,
+                fallback=quota.get("used_tokens", 0),
             )
-            os.replace(tmp_path, path)
             logger.debug("quota deducted: %s +%d → used=%d", token[:12], total_tokens, used)
-        except OSError as exc:
-            logger.error("failed to write api_keys.json: %s", exc)
+        except Exception as exc:
+            logger.error("failed to update quota SQLite store: %s", exc)
+            return None
 
         return {
             "total_tokens": quota.get("total_tokens", 0),
@@ -188,6 +186,23 @@ class UsageManager:
                 "avg_latency_ms": 0.0,
             }
         return self._call_log.summary(key_id=key_id, date=date, **filters)
+
+    def used_tokens(self, token: str, fallback: int = 0) -> int:
+        return self._quota_store.get_used(token, fallback=fallback)
+
+    def sync_quotas_from_config(self, overwrite: bool = False) -> None:
+        self._quota_store.sync_from_config(overwrite=overwrite)
+
+    def overlay_quota_usage(self, data: dict[str, Any]) -> dict[str, Any]:
+        keys = data.get("keys", {}) if isinstance(data, dict) else {}
+        for token, info in keys.items():
+            quota = info.get("quota") or {}
+            if quota:
+                quota["used_tokens"] = self.used_tokens(
+                    token, fallback=quota.get("used_tokens", 0)
+                )
+                info["quota"] = quota
+        return data
 
     # ------------------------------------------------------------------
     # 内部
