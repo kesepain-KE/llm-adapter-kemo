@@ -46,7 +46,7 @@ def check_python() -> bool:
 
 
 def check_deps() -> bool:
-    deps = ["httpx", "tiktoken", "fastapi", "uvicorn"]
+    deps = ["httpx", "h2", "tiktoken", "fastapi", "uvicorn"]
     missing = []
     for dep in deps:
         try:
