@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from core.call_log import exception_message
+
 
 def log_v1_success(
     ctx,
@@ -60,7 +62,9 @@ def log_v1_error(
         capability=capability,
         request=request,
         response={},
-        error=f"{type(error).__name__}: {error}",
+        error=f"{type(error).__name__}: {exception_message(error)}",
+        exception=error,
+        error_phase="upstream_request",
         latency_ms=latency_ms,
         completion_latency_ms=latency_ms,
     )
