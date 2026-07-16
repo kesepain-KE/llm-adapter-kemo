@@ -2,12 +2,52 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
 from core.router import RouterError
 from api.errors import auth_to_http
 from api.services.config_store import read_text
+
+
+STREAM_HEARTBEAT_SECONDS = 15.0
+
+
+async def _iterate_with_heartbeat(stream):
+    """Yield provider chunks while keeping the downstream SSE connection alive.
+
+    A provider can legitimately take several minutes between data events.  The
+    pending ``anext`` task must not be cancelled when a heartbeat is due,
+    otherwise timing out one wait would also tear down the upstream stream.
+    """
+    iterator = stream.__aiter__()
+    pending: asyncio.Task | None = None
+    try:
+        while True:
+            if pending is None:
+                pending = asyncio.create_task(anext(iterator))
+            done, _ = await asyncio.wait(
+                {pending}, timeout=STREAM_HEARTBEAT_SECONDS
+            )
+            if not done:
+                yield True, None
+                continue
+
+            completed = pending
+            pending = None
+            try:
+                chunk = completed.result()
+            except StopAsyncIteration:
+                return
+            yield False, chunk
+    finally:
+        if pending is not None:
+            pending.cancel()
+            try:
+                await pending
+            except asyncio.CancelledError:
+                pass
 
 
 def _inject_global_system(body: dict) -> None:
@@ -135,7 +175,14 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
     final_usage = None
     response_stub: dict[str, Any] = {"id": "", "model": vendor_model, "choices": []}
     try:
-        async for chunk in chat.invoke_stream(body):
+        async for is_heartbeat, chunk in _iterate_with_heartbeat(
+            chat.invoke_stream(body)
+        ):
+            if is_heartbeat:
+                # SSE comment: clients ignore it as content, while every hop
+                # still observes bytes and resets its idle-read timeout.
+                yield ": keep-alive\n\n"
+                continue
             if isinstance(chunk, dict):
                 if response_latency_ms is None:
                     response_latency_ms = (time.perf_counter() - t0_start) * 1000
@@ -163,6 +210,19 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             completion_latency_ms=completion_latency_ms,
         )
         yield "data: [DONE]\n\n"
+    except asyncio.CancelledError:
+        completion_latency_ms = (time.perf_counter() - t0_start) * 1000
+        if response_latency_ms is None:
+            response_latency_ms = completion_latency_ms
+        ctx.call_log.log(
+            key_id=token, key_name=key_info.get("name", token[:12]),
+            provider=provider, model=vendor_model, capability=capability,
+            request=body, response=response_stub,
+            error="CancelledError: downstream client disconnected",
+            latency_ms=response_latency_ms,
+            completion_latency_ms=completion_latency_ms,
+        )
+        raise
     except Exception as exc:
         completion_latency_ms = (time.perf_counter() - t0_start) * 1000
         if response_latency_ms is None:
