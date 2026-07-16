@@ -43,3 +43,12 @@ def get_ctx():
         from core import bootstrap
         _ctx = bootstrap(str(PROJECT_ROOT))
     return _ctx
+
+
+async def close_ctx() -> None:
+    """Close the lazily-created application context without creating one."""
+    global _ctx
+    ctx = _ctx
+    _ctx = None
+    if ctx is not None:
+        await ctx.aclose()
