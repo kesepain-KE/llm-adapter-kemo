@@ -7,7 +7,8 @@ from api.services import load_json, save_json
 
 
 async def api_keys():
-    keys = load_json("config/api_keys.json").get("keys", {})
+    data = get_ctx().usage.overlay_quota_usage(load_json("config/api_keys.json"))
+    keys = data.get("keys", {})
     result = []
     for token, info in keys.items():
         result.append({
@@ -28,5 +29,5 @@ async def api_keys_models(key_id: str, req: Request):
         raise HTTPException(404, detail=f"unknown key: {key_id}")
     data["keys"][key_id]["models"] = models_list
     save_json("config/api_keys.json", data)
-    get_ctx().auth.load()
+    get_ctx().auth.load(force=True)
     return {"id": key_id, "models": models_list}
