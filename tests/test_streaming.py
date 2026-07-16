@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import unittest
@@ -46,6 +47,19 @@ class _FakeChat:
             yield chunk
         if self.error is not None:
             raise self.error
+
+
+class _DelayedChat:
+    async def invoke_stream(self, body):
+        await asyncio.sleep(0.04)
+        yield {"id": "x", "choices": [{"delta": {"content": "ready"}}]}
+
+
+class _NeverChat:
+    async def invoke_stream(self, body):
+        await asyncio.Event().wait()
+        if False:  # pragma: no cover - makes this an async generator
+            yield {}
 
 
 class _FakeResponse:
@@ -154,6 +168,52 @@ class GatewayStreamContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error["type"], "upstream_stream_error")
         self.assertIn("overloaded", error["message"])
         self.assertNotIn("[DONE]", events)
+
+    async def test_slow_first_chunk_emits_heartbeat_without_cancelling_upstream(self):
+        ctx = _Ctx()
+        result = []
+        with patch("api.services.chat_service.STREAM_HEARTBEAT_SECONDS", 0.01):
+            async for item in _stream_generator(
+                _DelayedChat(),
+                {"model": "vendor-model", "messages": []},
+                ctx,
+                "test-token",
+                {"name": "test"},
+                "deepseek",
+                "vendor-model",
+                "chat",
+                0.0,
+            ):
+                result.append(item)
+
+        heartbeats = [item for item in result if item.startswith(": keep-alive")]
+        data_events = _decode_sse([item for item in result if item.startswith("data: ")])
+        self.assertGreaterEqual(len(heartbeats), 1)
+        self.assertEqual(data_events[0]["choices"][0]["delta"]["content"], "ready")
+        self.assertEqual(data_events[-1], "[DONE]")
+
+    async def test_downstream_cancellation_is_logged_and_propagated(self):
+        ctx = _Ctx()
+        stream = _stream_generator(
+            _NeverChat(),
+            {"model": "vendor-model", "messages": []},
+            ctx,
+            "test-token",
+            {"name": "test"},
+            "deepseek",
+            "vendor-model",
+            "chat",
+            0.0,
+        )
+        pending = asyncio.create_task(anext(stream))
+        await asyncio.sleep(0)
+        pending.cancel()
+
+        with self.assertRaises(asyncio.CancelledError):
+            await pending
+
+        self.assertEqual(len(ctx.call_log.entries), 1)
+        self.assertIn("downstream client disconnected", ctx.call_log.entries[0]["error"])
 
 
 class DeepSeekSSEParserTests(unittest.IsolatedAsyncioTestCase):
