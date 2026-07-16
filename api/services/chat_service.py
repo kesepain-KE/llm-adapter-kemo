@@ -3,15 +3,94 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import random
 import time
+import uuid
 from typing import Any
 
+import httpx
+
+from core.call_log import exception_message
+from core.concurrency import ConcurrencyLimitError
 from core.router import RouterError
 from api.errors import auth_to_http
 from api.services.config_store import read_text
 
 
 STREAM_HEARTBEAT_SECONDS = 15.0
+logger = logging.getLogger(__name__)
+
+
+def _non_negative_int_env(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.environ.get(name, str(default))))
+    except ValueError:
+        return default
+
+
+CONNECT_RETRIES = _non_negative_int_env("KEMO_CONNECT_RETRIES", 2)
+CONNECT_RETRY_BASE_SECONDS = 0.5
+CONNECT_RETRY_MAX_SECONDS = 2.0
+
+
+def _is_connect_error(exc: BaseException) -> bool:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (httpx.ConnectError, httpx.ConnectTimeout)):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _connect_retry_delay(retry_number: int) -> float:
+    base = min(
+        CONNECT_RETRY_MAX_SECONDS,
+        CONNECT_RETRY_BASE_SECONDS * (2 ** max(0, retry_number - 1)),
+    )
+    return base + random.uniform(0, base * 0.25)
+
+
+async def _invoke_with_connect_retries(chat, body, provider, request_id, state):
+    for attempt in range(1, CONNECT_RETRIES + 2):
+        state["attempt_count"] = attempt
+        try:
+            return await chat.invoke(body)
+        except Exception as exc:
+            if not _is_connect_error(exc) or attempt > CONNECT_RETRIES:
+                raise
+            delay = _connect_retry_delay(attempt)
+            logger.warning(
+                "request_id=%s provider=%s connect retry=%d delay=%.2fs error=%s",
+                request_id, provider, attempt, delay, exception_message(exc),
+            )
+            await asyncio.sleep(delay)
+
+
+async def _stream_with_connect_retries(chat, body, provider, request_id, state):
+    """Retry connection failures only before the first upstream chunk."""
+    for attempt in range(1, CONNECT_RETRIES + 2):
+        state["attempt_count"] = attempt
+        emitted = False
+        try:
+            async for chunk in chat.invoke_stream(body):
+                emitted = True
+                state["upstream_emitted"] = True
+                yield chunk
+            return
+        except Exception as exc:
+            if emitted or not _is_connect_error(exc) or attempt > CONNECT_RETRIES:
+                raise
+            delay = _connect_retry_delay(attempt)
+            logger.warning(
+                "request_id=%s provider=%s stream connect retry=%d "
+                "delay=%.2fs error=%s",
+                request_id, provider, attempt, delay, exception_message(exc),
+            )
+            await asyncio.sleep(delay)
 
 
 async def _iterate_with_heartbeat(stream):
@@ -74,6 +153,8 @@ async def handle_chat(
     抛出 HTTPException 时由 FastAPI 自动处理。
     """
     t0 = time.perf_counter()
+    request_id = f"kemo-{uuid.uuid4().hex}"
+    retry_state = {"attempt_count": 1, "upstream_emitted": False}
 
     # 1. 鉴权
     exposed_model: str = body.get("model", "")
@@ -134,12 +215,42 @@ async def handle_chat(
     except ModuleNotFoundError as exc:
         raise HTTPException(503, detail=f"provider '{provider}' chat not loaded: {exc}")
 
-    # 5. 调用
+    # 5. 并发准入
+    try:
+        lease = await ctx.concurrency.acquire(provider)
+    except ConcurrencyLimitError as exc:
+        latency_ms = (time.perf_counter() - t0) * 1000
+        ctx.call_log.log(
+            key_id=token, key_name=key_info.get("name", token[:12]),
+            provider=provider, model=vendor_model, capability=capability,
+            request=body, response={},
+            error=f"{type(exc).__name__}: {exception_message(exc)}", exception=exc,
+            error_phase="gateway_queue", request_id=request_id,
+            attempt_count=1, latency_ms=latency_ms,
+            completion_latency_ms=latency_ms,
+        )
+        raise HTTPException(
+            429,
+            detail={
+                "error": {
+                    "message": str(exc),
+                    "type": "concurrency_limit",
+                    "code": "gateway_busy",
+                    "request_id": request_id,
+                }
+            },
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+    # 6. 调用
     try:
         if stream:
             return _stream_generator(chat, body, ctx, token, key_info, provider,
-                                     vendor_model, capability, t0)
-        response: dict[str, Any] = await chat.invoke(body)
+                                     vendor_model, capability, t0, lease=lease,
+                                     request_id=request_id, retry_state=retry_state)
+        response: dict[str, Any] = await _invoke_with_connect_retries(
+            chat, body, provider, request_id, retry_state
+        )
         latency_ms = (time.perf_counter() - t0) * 1000
     except Exception as exc:
         latency_ms = (time.perf_counter() - t0) * 1000
@@ -147,24 +258,32 @@ async def handle_chat(
             key_id=token, key_name=key_info.get("name", token[:12]),
             provider=provider, model=vendor_model, capability=capability,
             request=body, response={},
-            error=f"{type(exc).__name__}: {exc}", latency_ms=latency_ms,
+            error=f"{type(exc).__name__}: {exception_message(exc)}", exception=exc,
+            error_phase="upstream_connect" if _is_connect_error(exc) else "upstream_request",
+            request_id=request_id, attempt_count=retry_state["attempt_count"],
+            latency_ms=latency_ms,
             completion_latency_ms=latency_ms,
         )
-        raise HTTPException(502, detail=str(exc)) from exc
+        raise HTTPException(502, detail=exception_message(exc)) from exc
+    finally:
+        if not stream:
+            await lease.release()
 
-    # 6. usage + log
+    # 7. usage + log
     usage = ctx.usage.count(provider, response, request=body)
     ctx.call_log.log(
         key_id=token, key_name=key_info.get("name", token[:12]),
         provider=provider, model=vendor_model, capability=capability,
         request=body, response=response, usage=usage, latency_ms=latency_ms,
         completion_latency_ms=latency_ms,
+        request_id=request_id, attempt_count=retry_state["attempt_count"],
     )
     return response
 
 
 async def _stream_generator(chat, body, ctx, token, key_info, provider,
-                            vendor_model, capability, t0_start):
+                            vendor_model, capability, t0_start, lease=None,
+                            request_id="", retry_state=None):
     """SSE 流式 generator。
 
     ``[DONE]`` 只表示上游完整结束。异常路径发送结构化 ``error`` 事件后
@@ -173,10 +292,13 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
     import json as _json
     response_latency_ms = None
     final_usage = None
+    retry_state = retry_state or {"attempt_count": 1, "upstream_emitted": False}
     response_stub: dict[str, Any] = {"id": "", "model": vendor_model, "choices": []}
     try:
         async for is_heartbeat, chunk in _iterate_with_heartbeat(
-            chat.invoke_stream(body)
+            _stream_with_connect_retries(
+                chat, body, provider, request_id, retry_state
+            )
         ):
             if is_heartbeat:
                 # SSE comment: clients ignore it as content, while every hop
@@ -208,9 +330,10 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             request=body, response=response_stub, usage=usage,
             latency_ms=response_latency_ms,
             completion_latency_ms=completion_latency_ms,
+            request_id=request_id, attempt_count=retry_state["attempt_count"],
         )
         yield "data: [DONE]\n\n"
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as exc:
         completion_latency_ms = (time.perf_counter() - t0_start) * 1000
         if response_latency_ms is None:
             response_latency_ms = completion_latency_ms
@@ -218,7 +341,9 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             key_id=token, key_name=key_info.get("name", token[:12]),
             provider=provider, model=vendor_model, capability=capability,
             request=body, response=response_stub,
-            error="CancelledError: downstream client disconnected",
+            error="CancelledError: downstream client disconnected", exception=exc,
+            error_phase="downstream_disconnect", request_id=request_id,
+            attempt_count=retry_state["attempt_count"],
             latency_ms=response_latency_ms,
             completion_latency_ms=completion_latency_ms,
         )
@@ -231,16 +356,27 @@ async def _stream_generator(chat, body, ctx, token, key_info, provider,
             key_id=token, key_name=key_info.get("name", token[:12]),
             provider=provider, model=vendor_model, capability=capability,
             request=body, response=response_stub,
-            error=f"{type(exc).__name__}: {exc}",
+            error=f"{type(exc).__name__}: {exception_message(exc)}", exception=exc,
+            error_phase=(
+                "upstream_connect"
+                if _is_connect_error(exc) and not retry_state["upstream_emitted"]
+                else "upstream_stream"
+            ),
+            request_id=request_id, attempt_count=retry_state["attempt_count"],
             latency_ms=response_latency_ms,
             completion_latency_ms=completion_latency_ms,
         )
         error_payload = {
             "error": {
-                "message": str(exc),
+                "message": exception_message(exc),
                 "type": "upstream_stream_error",
                 "code": "stream_interrupted",
+                "exception_type": type(exc).__name__,
+                "request_id": request_id,
             }
         }
         err = _json.dumps(error_payload, ensure_ascii=False)
         yield f"data: {err}\n\n"
+    finally:
+        if lease is not None:
+            await lease.release()
