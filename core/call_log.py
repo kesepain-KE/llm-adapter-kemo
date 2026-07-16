@@ -48,6 +48,36 @@ def _load_timezone() -> ZoneInfo:
 APP_TIMEZONE = _load_timezone()
 
 
+def exception_message(exc: BaseException) -> str:
+    """Return a useful non-empty message for exceptions such as ConnectError."""
+    message = str(exc).strip()
+    if message:
+        return message
+    cause = exc.__cause__ or exc.__context__
+    if cause is not None:
+        cause_message = str(cause).strip()
+        if cause_message:
+            return cause_message
+        return repr(cause)
+    return repr(exc)
+
+
+def exception_causes(exc: BaseException, max_depth: int = 5) -> list[dict[str, str]]:
+    """Return a bounded, JSON-safe cause chain for diagnostics."""
+    result: list[dict[str, str]] = []
+    current = exc.__cause__ or exc.__context__
+    seen: set[int] = set()
+    while current is not None and len(result) < max_depth and id(current) not in seen:
+        seen.add(id(current))
+        result.append({
+            "type": type(current).__name__,
+            "message": exception_message(current)[:1000],
+            "repr": repr(current)[:1000],
+        })
+        current = current.__cause__ or current.__context__
+    return result
+
+
 class CallLogger:
     """统一调用日志记录器。
 
@@ -88,6 +118,10 @@ class CallLogger:
         error: str | None = None,
         latency_ms: float = 0.0,
         completion_latency_ms: float | None = None,
+        request_id: str | None = None,
+        exception: BaseException | None = None,
+        error_phase: str | None = None,
+        attempt_count: int = 1,
     ) -> dict[str, Any]:
         """记录一次 API 调用。
 
@@ -98,9 +132,13 @@ class CallLogger:
         """
         now = datetime.now(APP_TIMEZONE)
 
+        if exception is not None and not error:
+            error = f"{type(exception).__name__}: {exception_message(exception)}"
+
         entry: dict[str, Any] = {
             "timestamp": now.isoformat(),
-            "request_id": (response or {}).get("id", ""),
+            "request_id": request_id or (response or {}).get("id", ""),
+            "upstream_request_id": (response or {}).get("id", ""),
             "key_id": key_id,
             "key_name": key_name,
             "provider": provider,
@@ -110,7 +148,16 @@ class CallLogger:
             "latency_ms": round(latency_ms, 2),
             "error": error,
             "usage": usage or {},
+            "attempt_count": max(1, int(attempt_count)),
         }
+
+        if exception is not None:
+            entry["error_type"] = type(exception).__name__
+            entry["error_message"] = exception_message(exception)[:1000]
+            entry["error_repr"] = repr(exception)[:1000]
+            entry["error_causes"] = exception_causes(exception)
+        if error_phase:
+            entry["error_phase"] = error_phase
 
         if completion_latency_ms is not None:
             entry["completion_latency_ms"] = round(completion_latency_ms, 2)
