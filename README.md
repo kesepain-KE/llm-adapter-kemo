@@ -330,6 +330,34 @@ GET  /v1/videos/{job_id}/content
 
 统计日期按应用时区切分，默认 `Asia/Shanghai`；如需改为其他时区，可在环境变量或 `provider.env` 中设置 `KEMO_TIMEZONE`。
 
+### 并发、重试与配额状态
+
+聊天请求在进入上游前经过全局与单 Provider 两级并发闸门。以下配置位于
+`provider.env`，修改后需重启：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `KEMO_CHAT_GLOBAL_CONCURRENCY` | `32` | 单进程同时执行的聊天上游请求总数 |
+| `KEMO_CHAT_PROVIDER_CONCURRENCY` | `16` | 单 Provider 同时执行的聊天上游请求数 |
+| `KEMO_CHAT_QUEUE_TIMEOUT` | `10` | 等待并发槽位的秒数；超时返回 `429` |
+| `KEMO_CONNECT_RETRIES` | `2` | 仅在上游未返回任何 chunk 时重试连接错误 |
+
+可变的 `used_tokens` 以 `data_status/quota.sqlite3` 为权威存储，使用 SQLite
+WAL 和事务进行并发扣减。`config/api_keys.json` 继续保存密钥、模型白名单、
+总额度以及首次迁移时的计数种子；普通配置保存不会用旧面板快照覆盖 SQLite
+中的实时计数。
+
+仓库提供可选流式压测脚本。只应对已获批准的目标运行，API 密钥通过环境变量
+传入，避免出现在命令行：
+
+```bash
+KEMO_LOAD_TEST_API_KEY=sk-kemo-... python tests/load_chat.py \
+  --model deepseek-deepseek-v4-flash --concurrency 10 --requests 50
+```
+
+当前并发闸门是进程内状态，调用日志与配置写入仍是文件存储，因此不要直接启用
+多个 Uvicorn worker。应在完成共享限流与日志/配置存储改造后再评估水平扩展。
+
 ### model.json 注册格式
 
 ```json

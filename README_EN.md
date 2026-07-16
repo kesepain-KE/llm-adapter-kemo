@@ -190,6 +190,37 @@ Example configs are available in `.example` copies of each file.
 
 Usage dates are grouped by the application timezone. The default is `Asia/Shanghai`; set `KEMO_TIMEZONE` in the environment or `provider.env` to override it.
 
+### Concurrency, retries, and quota state
+
+Chat calls pass through global and per-provider admission limits before reaching
+an upstream provider. These `provider.env` settings require a restart:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `KEMO_CHAT_GLOBAL_CONCURRENCY` | `32` | Total active upstream chat calls per process |
+| `KEMO_CHAT_PROVIDER_CONCURRENCY` | `16` | Active upstream chat calls per provider |
+| `KEMO_CHAT_QUEUE_TIMEOUT` | `10` | Seconds to wait for capacity before returning `429` |
+| `KEMO_CONNECT_RETRIES` | `2` | Connection retries allowed only before any upstream chunk |
+
+Mutable `used_tokens` counters are authoritative in
+`data_status/quota.sqlite3`, using SQLite WAL and transactional increments.
+`config/api_keys.json` continues to hold key identity, model allow-lists, total
+quotas, and the one-time migration seed. A normal config save does not replace
+live SQLite counters with a stale panel snapshot.
+
+An opt-in streaming load test is included. Run it only against an approved
+target; the key is provided through the environment so it is not exposed in the
+command line:
+
+```bash
+KEMO_LOAD_TEST_API_KEY=sk-kemo-... python tests/load_chat.py \
+  --model deepseek-deepseek-v4-flash --concurrency 10 --requests 50
+```
+
+Admission state is currently process-local, while call logs and configuration
+remain file-backed. Do not enable multiple Uvicorn workers until admission and
+log/config state have been moved to shared, process-safe storage.
+
 ### Model Registration Example
 
 ```json
