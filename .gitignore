@@ -20,6 +20,7 @@ provider.env
 
 # 运行时数据
 data_status/call_log/
+data_status/quota.sqlite3*
 
 # 虚拟环境
 .venv/
