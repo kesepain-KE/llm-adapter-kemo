@@ -7,10 +7,14 @@ from api.services import load_json, save_json, read_text, write_text
 
 
 async def api_config():
+    ctx = get_ctx()
+    api_keys_json = ctx.usage.overlay_quota_usage(
+        load_json("config/api_keys.json")
+    )
     return {
         "config_json": load_json("config/config.json"),
         "models_json": load_json("config/models.json"),
-        "api_keys_json": load_json("config/api_keys.json"),
+        "api_keys_json": api_keys_json,
         "global_prompt": read_text("config/global_prompt.md"),
         "provider_env": read_text("provider.env"),
     }
@@ -45,6 +49,9 @@ async def api_config_save(file: str, req: Request):
     elif file == "models":
         ctx.router.load()
     elif file == "api_keys":
-        ctx.auth.load()
+        # SQLite is authoritative for mutable usage. Config saves may carry a
+        # stale panel snapshot, so only initialize counters for newly added keys.
+        ctx.usage.sync_quotas_from_config(overwrite=False)
+        ctx.auth.load(force=True)
 
     return {"saved": file}
