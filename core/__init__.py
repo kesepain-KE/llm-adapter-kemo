@@ -62,6 +62,10 @@ class AppContext:
     usage: UsageManager = field(default_factory=UsageManager)
     concurrency: ConcurrencyManager = field(default_factory=ConcurrencyManager)
 
+    async def aclose(self) -> None:
+        """Release optional resources owned by registered Provider modules."""
+        await self.registry.aclose()
+
 
 def bootstrap(project_root: str | Path = ".") -> AppContext:
     """一键初始化所有 core 模块。
