@@ -314,7 +314,7 @@ def check_requirements_changed() -> bool:
 
 
 def check_deps() -> list[str]:
-    deps = ["httpx", "tiktoken", "fastapi", "uvicorn"]
+    deps = ["httpx", "h2", "tiktoken", "fastapi", "uvicorn"]
     missing = []
     for dep in deps:
         try:
