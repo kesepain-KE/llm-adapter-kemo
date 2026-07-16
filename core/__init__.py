@@ -32,6 +32,7 @@ from .router import Router, RouterError
 from .registry import Registry
 from .call_log import CallLogger
 from .usage import UsageManager, QuotaExceededError
+from .concurrency import ConcurrencyManager, ConcurrencyLimitError
 
 __all__ = [
     "bootstrap",
@@ -44,6 +45,8 @@ __all__ = [
     "CallLogger",
     "UsageManager",
     "QuotaExceededError",
+    "ConcurrencyManager",
+    "ConcurrencyLimitError",
 ]
 
 
@@ -57,6 +60,7 @@ class AppContext:
     auth: AuthManager = field(default_factory=AuthManager)
     call_log: CallLogger = field(default_factory=CallLogger)
     usage: UsageManager = field(default_factory=UsageManager)
+    concurrency: ConcurrencyManager = field(default_factory=ConcurrencyManager)
 
 
 def bootstrap(project_root: str | Path = ".") -> AppContext:
@@ -92,8 +96,11 @@ def bootstrap(project_root: str | Path = ".") -> AppContext:
     call_log = CallLogger(root)
 
     usage = UsageManager(root, registry=registry)
+    auth.bind_quota_reader(usage.used_tokens)
     usage.bind_call_log(call_log)
     call_log.bind_quota_deduct(usage.deduct_quota)
+
+    concurrency = ConcurrencyManager()
 
     return AppContext(
         project_root=str(root),
@@ -102,4 +109,5 @@ def bootstrap(project_root: str | Path = ".") -> AppContext:
         auth=auth,
         call_log=call_log,
         usage=usage,
+        concurrency=concurrency,
     )
