@@ -32,5 +32,6 @@ async def api_health():
         "error_rate_pct": round(error_rate, 2),
         "server_version": "0.1.0",
         "quota_enabled": True,
+        "concurrency": ctx.concurrency.snapshot(),
         "base_url": read_display_base_url(),
     }
