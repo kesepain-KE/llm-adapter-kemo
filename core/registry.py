@@ -14,6 +14,7 @@ Provider 注册中心。
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import logging
 from pathlib import Path
@@ -81,7 +82,15 @@ class Registry:
     # ------------------------------------------------------------------
 
     def load_all(self) -> None:
-        """加载所有 provider 的已启用模块。"""
+        """加载所有 provider 的已启用模块。
+
+        已创建的模块实例会被复用。``config.json`` 热加载只改变启用状态，
+        不重复创建 Provider 自己持有的 HTTP 客户端；Provider 源码、
+        ``model.json`` 和 ``provider.env`` 的变更仍按项目约定通过重启生效。
+        """
+        self._provider_configs = {}
+        self._capabilities = {}
+
         if not self._provider_dir.is_dir():
             logger.warning("provider directory not found: %s", self._provider_dir)
             return
@@ -156,7 +165,14 @@ class Registry:
                     caps[capability_key] = True
                 continue
 
-            instance = None
+            key = (provider_name, module_suffix)
+            instance = self._modules.get(key)
+
+            if instance is not None:
+                already_loaded.add(module_suffix)
+                caps[capability_key] = True
+                logger.debug("reused %s/%s", provider_name, capability_key)
+                continue
 
             # 1) 尝试从 package __init__ 里找工厂函数
             if pkg is not None:
@@ -209,7 +225,7 @@ class Registry:
                             )
 
             if instance is not None:
-                self._modules[(provider_name, module_suffix)] = instance
+                self._modules[key] = instance
                 already_loaded.add(module_suffix)
                 caps[capability_key] = True
                 logger.info(
@@ -272,13 +288,48 @@ class Registry:
         # capability 可能是子能力，映射到模块后缀
         module_suffix = CAPABILITY_MODULE.get(capability, capability)
         key = (provider, module_suffix)
-        if key not in self._modules:
+        module_enabled = any(
+            enabled and CAPABILITY_MODULE.get(cap, cap) == module_suffix
+            for cap, enabled in self._capabilities.get(provider, {}).items()
+        )
+        if key not in self._modules or not module_enabled:
             raise ModuleNotFoundError(
                 f"provider '{provider}' has no module '{capability}' "
                 f"(module '{module_suffix}' not loaded, "
                 f"available: {list(self._capabilities.get(provider, {}))})"
             )
         return self._modules[key]
+
+    async def aclose(self) -> None:
+        """Best-effort cleanup for all loaded Provider module instances.
+
+        Provider modules are external extensions, so cleanup is optional and
+        discovered at runtime. Both ``aclose()`` and sync/async ``close()`` are
+        supported; one failing extension does not prevent the others closing.
+        """
+        unique_modules = list(
+            {id(module): module for module in self._modules.values()}.values()
+        )
+        self._modules = {}
+        self._provider_configs = {}
+        self._capabilities = {}
+
+        for module in unique_modules:
+            try:
+                close = getattr(module, "aclose", None)
+                if not callable(close):
+                    close = getattr(module, "close", None)
+                if not callable(close):
+                    continue
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                logger.warning(
+                    "failed to close provider module %s",
+                    type(module).__name__,
+                    exc_info=True,
+                )
 
     def has_capability(self, provider: str, capability: str) -> bool:
         """检查 provider 是否具备某个能力（支持子能力如 "audio.asr"）。"""
