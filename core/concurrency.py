@@ -51,9 +51,9 @@ class ConcurrencySettings:
     @classmethod
     def from_env(cls) -> "ConcurrencySettings":
         return cls(
-            global_limit=_positive_int("KEMO_CHAT_GLOBAL_CONCURRENCY", 32),
-            provider_limit=_positive_int("KEMO_CHAT_PROVIDER_CONCURRENCY", 16),
-            queue_timeout_seconds=_positive_float("KEMO_CHAT_QUEUE_TIMEOUT", 10.0),
+            global_limit=_positive_int("VOTX_CHAT_GLOBAL_CONCURRENCY", 32),
+            provider_limit=_positive_int("VOTX_CHAT_PROVIDER_CONCURRENCY", 16),
+            queue_timeout_seconds=_positive_float("VOTX_CHAT_QUEUE_TIMEOUT", 10.0),
         )
 
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const SESSION_KEY = 'kemo_auth_session';
+const SESSION_KEY = 'VOTX_auth_session';
 const LOGIN_API = '/api/auth/login';
 
 /** 从 localStorage / sessionStorage 恢复会话 */
@@ -136,7 +136,7 @@ export default function AuthGate({ children, auth }) {
             </svg>
           </div>
           <div className="auth-brand-text">
-            <h1>Kemo Adapter</h1>
+            <h1>VOTX Adapter</h1>
             <p>管理面板 · 身份验证</p>
           </div>
         </div>

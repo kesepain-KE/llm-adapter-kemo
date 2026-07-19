@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kemo LLM Adapter — 首次初始化 / 维护工具。
+VOTX LLM Adapter — 首次初始化 / 维护工具。
 
 用法::
 
@@ -236,7 +236,7 @@ def show_key_hint() -> None:
 
 def wizard(skip_install: bool = False) -> None:
     print("=" * 60)
-    print("  Kemo LLM Adapter — 初始化向导")
+    print("  VOTX LLM Adapter — 初始化向导")
     print("=" * 60)
 
     print("\n[1/4] 环境检查")
@@ -272,7 +272,7 @@ def wizard(skip_install: bool = False) -> None:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Kemo LLM Adapter 初始化工具")
+    parser = argparse.ArgumentParser(description="VOTX LLM Adapter 初始化工具")
     parser.add_argument("--check", action="store_true", help="仅检查环境")
     parser.add_argument("--install", action="store_true", help="仅安装依赖")
     parser.add_argument("--validate", action="store_true", help="仅 core 自检")

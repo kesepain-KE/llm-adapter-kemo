@@ -1,4 +1,4 @@
-# Kemo LLM Adapter — 新厂商接入指南
+# VOTX LLM Adapter — 新厂商接入指南
 
 本文档面向 AI Agent，定义完整的 Provider 注册流程。**请严格按步骤执行，不要跳步。**
 

@@ -11,7 +11,7 @@ API 鉴权模块。
 用法::
 
     auth = AuthManager(project_root="/path/to/project")
-    key_info = auth.authenticate("sk-kemo-admin", "deepseek-deepseek-v4-flash")
+    key_info = auth.authenticate("sk-votx-admin", "deepseek-deepseek-v4-flash")
 """
 
 from __future__ import annotations

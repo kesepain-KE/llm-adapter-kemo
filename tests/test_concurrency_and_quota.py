@@ -111,7 +111,7 @@ class ConcurrencyManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.headers["Retry-After"], "1")
         self.assertEqual(len(call_log.entries), 1)
         self.assertEqual(call_log.entries[0]["error_phase"], "gateway_queue")
-        self.assertTrue(call_log.entries[0]["request_id"].startswith("kemo-"))
+        self.assertTrue(call_log.entries[0]["request_id"].startswith("votx-"))
         self.assertEqual(manager.snapshot()["active"], 0)
 
 

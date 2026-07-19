@@ -1,5 +1,5 @@
 const BASE = '/api';
-const SESSION_KEY = 'kemo_auth_session';
+const SESSION_KEY = 'VOTX_auth_session';
 
 function getAuthToken() {
   try {

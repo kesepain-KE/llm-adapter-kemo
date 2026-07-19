@@ -267,8 +267,8 @@ function AppBar({ activeSection, baseUrl, onNavigate, onLogout }) {
   return (
     <div className="appbar">
       <div className="identity">
-        <img className="logo" src="/logo.png" alt="Kemo" />
-        <h1>Kemo Adapter</h1>
+        <img className="logo" src="/logo.png" alt="VOTX" />
+        <h1>VOTX Adapter</h1>
       </div>
       <nav className="nav">
         {NAV_ITEMS.map(([id, label]) => (

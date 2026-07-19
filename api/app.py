@@ -42,7 +42,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Kemo LLM Adapter",
+    title="VOTX LLM Adapter",
     version="0.1.0",
     docs_url=None,
     redoc_url=None,

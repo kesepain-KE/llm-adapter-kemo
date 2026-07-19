@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kemo LLM Adapter update utility."""
+"""VOTX LLM Adapter update utility."""
 
 from __future__ import annotations
 
@@ -368,14 +368,14 @@ def run(check_only: bool = False, auto_yes: bool = False) -> int:
 
     print()
     print("=" * 56)
-    print("  Kemo LLM Adapter - Update Tool")
+    print("  VOTX LLM Adapter - Update Tool")
     print(f"  Local version: {local_ver or 'unknown'}")
     print("=" * 56)
     print()
 
     if not is_git_repo():
         log.error("current directory is not a git repository")
-        log.error("please clone from https://github.com/kesepain-KE/llm-adapter-kemo")
+        log.error("please clone from https://github.com/kesepain-KE/llm-adapter-votx")
         return 1
 
     remote_url = check_git_remote()
@@ -542,7 +542,7 @@ def run(check_only: bool = False, auto_yes: bool = False) -> int:
 def main() -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Kemo LLM Adapter update tool")
+    parser = argparse.ArgumentParser(description="VOTX LLM Adapter update tool")
     parser.add_argument("--check", action="store_true", help="check version differences only")
     parser.add_argument("--yes", action="store_true", help="non-interactive mode")
     args = parser.parse_args()

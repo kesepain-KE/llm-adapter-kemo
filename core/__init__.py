@@ -1,5 +1,5 @@
 """
-Kemo LLM Adapter Core — 多厂商 LLM 统一适配层。
+VOTX LLM Adapter Core — 多厂商 LLM 统一适配层。
 
 核心模块::
 

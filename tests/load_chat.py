@@ -1,6 +1,6 @@
-"""Opt-in streaming load test for a running Kemo gateway.
+"""Opt-in streaming load test for a running VOTX Gateway.
 
-The API key is read only from ``KEMO_LOAD_TEST_API_KEY`` so it does not appear
+The API key is read only from ``VOTX_LOAD_TEST_API_KEY`` so it does not appear
 in the process command line. This file is intentionally excluded from unittest
 discovery; run it explicitly against an approved target.
 """
@@ -100,9 +100,9 @@ async def run_one(client: httpx.AsyncClient, url: str, model: str) -> Result:
 
 
 async def main(args) -> int:
-    api_key = os.environ.get("KEMO_LOAD_TEST_API_KEY", "").strip()
+    api_key = os.environ.get("VOTX_LOAD_TEST_API_KEY", "").strip()
     if not api_key:
-        raise SystemExit("KEMO_LOAD_TEST_API_KEY is required")
+        raise SystemExit("VOTX_LOAD_TEST_API_KEY is required")
 
     queue: asyncio.Queue[int] = asyncio.Queue()
     for index in range(args.requests):
@@ -162,7 +162,7 @@ async def main(args) -> int:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Load test a Kemo streaming chat endpoint")
+    parser = argparse.ArgumentParser(description="Load test a VOTX streaming chat endpoint")
     parser.add_argument("--base-url", default="http://127.0.0.1:8741")
     parser.add_argument("--model", required=True)
     parser.add_argument("--concurrency", type=int, default=10)

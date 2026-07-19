@@ -1,4 +1,4 @@
-# Kemo LLM Adapter — 密钥创建指南
+# VOTX LLM Adapter — 密钥创建指南
 
 本文档面向 AI Agent，定义 API 密钥的完整创建流程。
 
@@ -60,17 +60,17 @@ provider.env           ← 厂商 API 密钥（非本密钥）
 
 | 类型 | 格式 | 示例 |
 |------|------|------|
-| **自动生成**（推荐） | `sk-{用途}-{40位随机十六进制}` | `sk-kemo-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0` |
-| **手动简短命名**（向后兼容） | `sk-{用途}` | `sk-kemo-admin` |
+| **自动生成**（推荐） | `sk-{用途}-{40位随机十六进制}` | `sk-votx-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0` |
+| **手动简短命名**（向后兼容） | `sk-{用途}` | `sk-votx-admin` |
 
 **自动生成的密钥 ID：**
 - 前缀 `sk-`（表示 secret key）
-- 中间 `{用途}`（如 `kemo-admin`, `kemo-guest`, `bot-xxx`）
+- 中间 `{用途}`（如 `votx-admin`, `votx-guest`, `bot-xxx`）
 - 后缀 `secrets.token_hex(20)` 生成 40 位十六进制（160 位安全强度）
 - 总长度约 50~60 字符
 
 **手动简短命名的密钥：**
-- 用于已存在的旧密钥（如 `sk-kemo-admin`）
+- 用于已存在的旧密钥（如 `sk-votx-admin`）
 - 新密钥按自动生成规则创建，不手动写随机串
 
 ---
@@ -92,8 +92,8 @@ for kid, info in data.get("keys", {}).items():
 
 ```
 当前已有密钥：
-1. sk-kemo-admin-a1b2c3... → 管理员密钥 (9 models, quota=1,000,000,000)
-2. sk-kemo-guest-c9d0e1... → 访客密钥 (2 models, quota=10,000,000)
+1. sk-votx-admin-a1b2c3... → 管理员密钥 (9 models, quota=1,000,000,000)
+2. sk-votx-guest-c9d0e1... → 访客密钥 (2 models, quota=10,000,000)
 
 请提供新密钥信息：
 1. 密钥名称（如「我的个人密钥」「测试密钥」「开发密钥」）
@@ -118,7 +118,7 @@ for kid, info in data.get("keys", {}).items():
 ```python
 import secrets
 
-def generate_key_id(purpose: str = "kemo") -> str:
+def generate_key_id(purpose: str = "votx") -> str:
     """生成安全随机密钥 ID。
 
     格式: sk-{purpose}-{40位随机十六进制}
@@ -131,11 +131,11 @@ def generate_key_id(purpose: str = "kemo") -> str:
 ### 2.2 生成示例
 
 ```python
-generate_key_id("kemo-admin")
-# → sk-kemo-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+generate_key_id("votx-admin")
+# → sk-votx-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
 
-generate_key_id("kemo-guest")
-# → sk-kemo-guest-c9d0e1f2a3b4c5d6e7f8a9b0a1b2c3d4e5f6a7b8
+generate_key_id("votx-guest")
+# → sk-votx-guest-c9d0e1f2a3b4c5d6e7f8a9b0a1b2c3d4e5f6a7b8
 
 generate_key_id("bot-dev")
 # → sk-bot-dev-e1f2a3b4c5d6e7f8a9b0a1b2c3d4e5f6a7b8c9d0
@@ -168,7 +168,7 @@ import secrets
 
 # 生成密钥 ID
 random_part = secrets.token_hex(20)  # 40 hex chars
-new_key_id = f"sk-kemo-guest-{random_part}"
+new_key_id = f"sk-votx-guest-{random_part}"
 
 new_key = {
     "name": "访客密钥",
@@ -195,7 +195,7 @@ with open("config/api_keys.json", "w", encoding="utf-8") as f:
 ```json
 {
   "keys": {
-    "sk-kemo-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0": {
+    "sk-votx-admin-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0": {
       "name": "管理员密钥",
       "enabled": true,
       "models": [
@@ -211,7 +211,7 @@ with open("config/api_keys.json", "w", encoding="utf-8") as f:
         "used_tokens": 0
       }
     },
-    "sk-kemo-guest-c9d0e1f2a3b4c5d6e7f8a9b0a1b2c3d4e5f6a7b8": {
+    "sk-votx-guest-c9d0e1f2a3b4c5d6e7f8a9b0a1b2c3d4e5f6a7b8": {
       "name": "访客密钥",
       "enabled": true,
       "models": [
@@ -270,7 +270,7 @@ curl -X POST http://127.0.0.1:8741/v1/chat/completions ^
 ✅ 密钥创建成功
 
 密钥 ID（已脱敏显示）：
-  sk-kemo-xxx...xxxx
+  sk-votx-xxx...xxxx
 
 名称：访客密钥
 授权模型：
@@ -312,7 +312,7 @@ Token 配额：10,000,000
 
 - `config/api_keys.json` **已加入 `.gitignore`**，不会提交到 Git
 - 新密钥**必须**使用 `secrets.token_hex()` 生成随机后缀（160 位安全强度）
-- 现存的简短密钥（如 `sk-kemo-admin`）为历史遗留，新密钥不再采用此格式
+- 现存的简短密钥（如 `sk-votx-admin`）为历史遗留，新密钥不再采用此格式
 - 生产环境建议定期轮换密钥
 - 密钥写入配置后**无需重启服务**，即写即生效
 
@@ -320,5 +320,5 @@ Token 配额：10,000,000
 
 ```bash
 # 一行生成安全密钥（purpose 替换为实际用途）
-python -c "import secrets; print(f'sk-kemo-{secrets.token_hex(20)}')"
+python -c "import secrets; print(f'sk-votx-{secrets.token_hex(20)}')"
 ```

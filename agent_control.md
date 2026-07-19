@@ -1,4 +1,4 @@
-# Kemo LLM Adapter — Agent 操作手册
+# VOTX LLM Adapter — Agent 操作手册
 
 > **工作流索引 →** 详见 `add_diy/` 目录下的各流程文件。
 
@@ -50,7 +50,7 @@
 ## 项目速览
 
 ```
-llm-adapter-kemo/
+llm-adapter-votx/
 ├── add_diy/                 ← 🎯 操作指引文档
 │   ├── build_adapter.md     ← 新厂商接入（7 步完整流程）
 │   └── build_key.md         ← 密钥创建（5 步完整流程）
@@ -101,7 +101,7 @@ llm-adapter-kemo/
 - Provider 边界：`provider/*` 是外部注册扩展，核心不依赖厂商内部实现；Registry 热加载复用已有模块实例，应用退出时按可选能力调用 `aclose()` 或 `close()`，未实现清理接口的 Provider 也必须可以正常运行
 - 配额存储：密钥、白名单和总额度保留在 `config/api_keys.json`；动态 `used_tokens` 以 `data_status/quota.sqlite3` 为权威存储
 - 多 worker：并发闸门仍为进程内状态，日志与配置仍为文件存储，完成共享状态改造前不得直接启用多 Uvicorn worker
-- 日期口径：统计按应用时区切日，默认 `Asia/Shanghai`，可通过 `KEMO_TIMEZONE` 覆盖
+- 日期口径：统计按应用时区切日，默认 `Asia/Shanghai`，可通过 `VOTX_TIMEZONE` 覆盖
 
 **热加载规则：**
 | 文件 | 需重启 |

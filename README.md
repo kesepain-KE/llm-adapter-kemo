@@ -9,10 +9,10 @@
 </p>
 
 ---
-# Kemo LLM Adapter
+# VOTX LLM Adapter
 
 <p align="center">
-  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="300">
+  <img src="./llm-adapter-votx.png" alt="VOTX LLM Adapter" width="300">
 </p>
 
 > 多厂商 LLM 统一适配层 — 一套 OpenAI 兼容 API 接入多种大模型  
@@ -36,10 +36,10 @@
 ## 简介 / Introduction
 
 **中文**  
-Kemo LLM Adapter 是一个轻量级 API 网关，将 DeepSeek、StepFun 等多家大模型厂商的服务统一暴露为 **OpenAI 兼容接口**。客户端只需挂载一个地址、一个 API Key，通过修改 `model` 参数即可切换后端厂商。
+VOTX LLM Adapter 是一个轻量级 API 网关，将 DeepSeek、StepFun 等多家大模型厂商的服务统一暴露为 **OpenAI 兼容接口**。客户端只需挂载一个地址、一个 API Key，通过修改 `model` 参数即可切换后端厂商。
 
 **English**  
-Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM providers (DeepSeek, StepFun, etc.) behind a single **OpenAI-compatible API**. Your client connects to one endpoint with one API key, and switches providers by changing the `model` parameter.
+VOTX LLM Adapter is a lightweight API gateway that unifies multiple LLM providers (DeepSeek, StepFun, etc.) behind a single **OpenAI-compatible API**. Your client connects to one endpoint with one API key, and switches providers by changing the `model` parameter.
 
 ### 特性 / Features
 
@@ -70,8 +70,8 @@ Kemo LLM Adapter is a lightweight API gateway that unifies multiple LLM provider
 ### 获取项目 / Get the Project
 
 ```bash
-git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
-cd llm-adapter-kemo
+git clone https://github.com/kesepain-KE/llm-adapter-votx.git
+cd llm-adapter-votx
 ```
 
 ### 初始化 / Initialize
@@ -328,7 +328,7 @@ GET  /v1/videos/{job_id}/content
 
 配置示例文件位于各文件的 `.example` 副本中。
 
-统计日期按应用时区切分，默认 `Asia/Shanghai`；如需改为其他时区，可在环境变量或 `provider.env` 中设置 `KEMO_TIMEZONE`。
+统计日期按应用时区切分，默认 `Asia/Shanghai`；如需改为其他时区，可在环境变量或 `provider.env` 中设置 `VOTX_TIMEZONE`。
 
 ### 并发、重试与配额状态
 
@@ -337,10 +337,10 @@ GET  /v1/videos/{job_id}/content
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `KEMO_CHAT_GLOBAL_CONCURRENCY` | `32` | 单进程同时执行的聊天上游请求总数 |
-| `KEMO_CHAT_PROVIDER_CONCURRENCY` | `16` | 单 Provider 同时执行的聊天上游请求数 |
-| `KEMO_CHAT_QUEUE_TIMEOUT` | `10` | 等待并发槽位的秒数；超时返回 `429` |
-| `KEMO_CONNECT_RETRIES` | `2` | 仅在上游未返回任何 chunk 时重试连接错误 |
+| `VOTX_CHAT_GLOBAL_CONCURRENCY` | `32` | 单进程同时执行的聊天上游请求总数 |
+| `VOTX_CHAT_PROVIDER_CONCURRENCY` | `16` | 单 Provider 同时执行的聊天上游请求数 |
+| `VOTX_CHAT_QUEUE_TIMEOUT` | `10` | 等待并发槽位的秒数；超时返回 `429` |
+| `VOTX_CONNECT_RETRIES` | `2` | 仅在上游未返回任何 chunk 时重试连接错误 |
 
 可变的 `used_tokens` 以 `data_status/quota.sqlite3` 为权威存储，使用 SQLite
 WAL 和事务进行并发扣减。`config/api_keys.json` 继续保存密钥、模型白名单、
@@ -351,7 +351,7 @@ WAL 和事务进行并发扣减。`config/api_keys.json` 继续保存密钥、�
 传入，避免出现在命令行：
 
 ```bash
-KEMO_LOAD_TEST_API_KEY=sk-kemo-... python tests/load_chat.py \
+VOTX_LOAD_TEST_API_KEY=sk-votx-... python tests/load_chat.py \
   --model deepseek-deepseek-v4-flash --concurrency 10 --requests 50
 ```
 
@@ -386,7 +386,7 @@ KEMO_LOAD_TEST_API_KEY=sk-kemo-... python tests/load_chat.py \
 ## 项目架构 / Project Architecture
 
 ```
-llm-adapter-kemo/
+llm-adapter-votx/
 ├── config/                  # 全局配置（热加载）
 │   ├── config.json          # Provider 启停开关
 │   ├── models.json          # 暴露模型名 → provider+model 映射
@@ -450,4 +450,4 @@ llm-adapter-kemo/
 
 ## 许可证 / License
 
-[MIT](LICENSE) © 2025 Kemo LLM Adapter Contributors
+[MIT](LICENSE) © 2025 VOTX LLM Adapter Contributors

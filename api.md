@@ -1,4 +1,4 @@
-# Kemo LLM Adapter — API 示例文档
+# VOTX LLM Adapter — API 示例文档
 
 服务地址示例: `http://127.0.0.1:8741`。
 

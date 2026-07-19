@@ -10,7 +10,7 @@ JSON Lines 格式，按 key_id + 日期分文件。
 
     call_log = CallLogger(project_root="/path/to/project")
     call_log.log(
-        key_id="sk-kemo-admin",
+        key_id="sk-votx-admin",
         key_name="管理密钥",
         provider="deepseek",
         model="deepseek-v4-flash",
@@ -40,7 +40,7 @@ CALL_LOG_DIR = "data_status/call_log"
 
 def _load_timezone() -> ZoneInfo:
     try:
-        return ZoneInfo(os.environ.get("KEMO_TIMEZONE", "Asia/Shanghai"))
+        return ZoneInfo(os.environ.get("VOTX_TIMEZONE", "Asia/Shanghai"))
     except Exception:
         return ZoneInfo("Asia/Shanghai")
 

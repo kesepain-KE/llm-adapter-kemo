@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 def _load_timezone() -> ZoneInfo:
     try:
-        return ZoneInfo(os.environ.get("KEMO_TIMEZONE", "Asia/Shanghai"))
+        return ZoneInfo(os.environ.get("VOTX_TIMEZONE", "Asia/Shanghai"))
     except Exception:
         return ZoneInfo("Asia/Shanghai")
 

@@ -30,7 +30,7 @@ def _non_negative_int_env(name: str, default: int) -> int:
         return default
 
 
-CONNECT_RETRIES = _non_negative_int_env("KEMO_CONNECT_RETRIES", 2)
+CONNECT_RETRIES = _non_negative_int_env("VOTX_CONNECT_RETRIES", 2)
 CONNECT_RETRY_BASE_SECONDS = 0.5
 CONNECT_RETRY_MAX_SECONDS = 2.0
 
@@ -153,7 +153,7 @@ async def handle_chat(
     抛出 HTTPException 时由 FastAPI 自动处理。
     """
     t0 = time.perf_counter()
-    request_id = f"kemo-{uuid.uuid4().hex}"
+    request_id = f"votx-{uuid.uuid4().hex}"
     retry_state = {"attempt_count": 1, "upstream_emitted": False}
 
     # 1. 鉴权

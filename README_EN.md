@@ -1,7 +1,7 @@
-# Kemo LLM Adapter
+# VOTX LLM Adapter
 
 <p align="center">
-  <img src="./llm-adapter-kemo.png" alt="Kemo LLM Adapter" width="300">
+  <img src="./llm-adapter-votx.png" alt="VOTX LLM Adapter" width="300">
 </p>
 
 > Multi-provider LLM unification layer — one OpenAI-compatible API to rule them all
@@ -10,13 +10,13 @@
 
 ## Overview
 
-Kemo LLM Adapter is a lightweight API gateway that unifies DeepSeek, StepFun, and other LLM providers behind a single **OpenAI-compatible API**. It acts as a middleware layer — your existing OpenAI SDK clients just change the base URL and API key, then switch between providers by modifying the `model` parameter.
+VOTX LLM Adapter is a lightweight API gateway that unifies DeepSeek, StepFun, and other LLM providers behind a single **OpenAI-compatible API**. It acts as a middleware layer — your existing OpenAI SDK clients just change the base URL and API key, then switch between providers by modifying the `model` parameter.
 
 ## Quick Setup
 
 ```bash
-git clone https://github.com/kesepain-KE/llm-adapter-kemo.git
-cd llm-adapter-kemo
+git clone https://github.com/kesepain-KE/llm-adapter-votx.git
+cd llm-adapter-votx
 python setup.py          # Install dependencies & generate config templates
 # Edit provider.env with your API keys, then:
 python server.py         # Start the gateway on http://127.0.0.1:8741
@@ -43,7 +43,7 @@ Your App / AI Agent
        │
        ▼  (OpenAI-compatible SDK)
  ┌─────────────────┐
- │  Kemo Gateway   │  ← one endpoint, one API key
+ │  VOTX Gateway   │  ← one endpoint, one API key
  │  :8741          │
  └────────┬────────┘
        │
@@ -188,7 +188,7 @@ Available models depend on registered providers and `models.json` configuration.
 
 Example configs are available in `.example` copies of each file.
 
-Usage dates are grouped by the application timezone. The default is `Asia/Shanghai`; set `KEMO_TIMEZONE` in the environment or `provider.env` to override it.
+Usage dates are grouped by the application timezone. The default is `Asia/Shanghai`; set `VOTX_TIMEZONE` in the environment or `provider.env` to override it.
 
 ### Concurrency, retries, and quota state
 
@@ -197,10 +197,10 @@ an upstream provider. These `provider.env` settings require a restart:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `KEMO_CHAT_GLOBAL_CONCURRENCY` | `32` | Total active upstream chat calls per process |
-| `KEMO_CHAT_PROVIDER_CONCURRENCY` | `16` | Active upstream chat calls per provider |
-| `KEMO_CHAT_QUEUE_TIMEOUT` | `10` | Seconds to wait for capacity before returning `429` |
-| `KEMO_CONNECT_RETRIES` | `2` | Connection retries allowed only before any upstream chunk |
+| `VOTX_CHAT_GLOBAL_CONCURRENCY` | `32` | Total active upstream chat calls per process |
+| `VOTX_CHAT_PROVIDER_CONCURRENCY` | `16` | Active upstream chat calls per provider |
+| `VOTX_CHAT_QUEUE_TIMEOUT` | `10` | Seconds to wait for capacity before returning `429` |
+| `VOTX_CONNECT_RETRIES` | `2` | Connection retries allowed only before any upstream chunk |
 
 Mutable `used_tokens` counters are authoritative in
 `data_status/quota.sqlite3`, using SQLite WAL and transactional increments.
@@ -213,7 +213,7 @@ target; the key is provided through the environment so it is not exposed in the
 command line:
 
 ```bash
-KEMO_LOAD_TEST_API_KEY=sk-kemo-... python tests/load_chat.py \
+VOTX_LOAD_TEST_API_KEY=sk-votx-... python tests/load_chat.py \
   --model deepseek-deepseek-v4-flash --concurrency 10 --requests 50
 ```
 
@@ -267,7 +267,7 @@ Example: `deepseek-deepseek-v4-flash` → provider=`deepseek`, vendor_model=`dee
 ## Project Structure
 
 ```
-llm-adapter-kemo/
+llm-adapter-votx/
 ├── config/                  # Global configuration (hot-reload)
 │   ├── config.json          # Provider on/off switches
 │   ├── models.json          # Model → provider mapping
@@ -321,4 +321,4 @@ The update script automatically backs up `config/` and `provider.env`, pulls the
 
 ## License
 
-[MIT](LICENSE) © 2025 Kemo LLM Adapter Contributors
+[MIT](LICENSE) © 2025 VOTX LLM Adapter Contributors
